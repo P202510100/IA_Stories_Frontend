@@ -1,0 +1,130 @@
+{
+  "name": "iastories-frontend",
+  "version": "1.0.0",
+  "description": "Frontend de IAStories - Plataforma educativa de historias generadas por IA para niños",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite preview --port 4173",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
+    "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --ignore-path .gitignore",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "analyze": "ANALYZE=true npm run build",
+    "clean": "rm -rf dist node_modules/.vite",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install",
+    "docker:build": "docker build -t iastories-frontend .",
+    "docker:run": "docker run -p 3000:3000 iastories-frontend"
+  },
+  "dependencies": {
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "axios": "^1.6.7",
+    "lodash": "^4.17.21",
+    "jspdf": "^2.5.1",
+    "html2canvas": "^1.4.1",
+    "chart.js": "^4.4.1",
+    "vue-chartjs": "^5.3.0",
+    "date-fns": "^3.3.1",
+    "uuid": "^9.0.1",
+    "validator": "^13.11.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.3",
+    "vite": "^5.0.12",
+    "eslint": "^8.56.0",
+    "eslint-plugin-vue": "^9.20.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "prettier": "^3.2.4",
+    "vitest": "^1.2.2",
+    "@vue/test-utils": "^2.4.4",
+    "happy-dom": "^13.3.1",
+    "autoprefixer": "^10.4.17",
+    "@fullhuman/postcss-purgecss": "^5.0.0",
+    "rollup-plugin-visualizer": "^5.12.0",
+    "sass": "^1.70.0",
+    "@types/lodash": "^4.14.202",
+    "@types/uuid": "^9.0.8",
+    "@types/validator": "^13.11.8"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ],
+  "keywords": [
+    "vue",
+    "vite",
+    "education",
+    "ai",
+    "stories",
+    "children",
+    "learning",
+    "gamification",
+    "frontend",
+    "spa"
+  ],
+  "author": {
+    "name": "IAStories Team",
+    "email": "contact@iastories.com",
+    "url": "https://iastories.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iastories/frontend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iastories/frontend/issues"
+  },
+  "homepage": "https://iastories.com",
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "lint-staged": {
+    "*.{js,jsx,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,scss,sass}": [
+      "prettier --write"
+    ],
+    "*.{md,json}": [
+      "prettier --write"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  },
+  "volta": {
+    "node": "20.11.0",
+    "npm": "10.3.0"
+  },
+  "packageManager": "npm@10.3.0",
+  "overrides": {
+    "vue": "^3.4.15"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.15"
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.3"
+  }
+}
