@@ -1,4 +1,4 @@
-// services/api.js - CORREGIDO 100% PARA TU BACKEND VERIFICADO
+
 import axios from 'axios'
 
 const api = axios.create({
@@ -20,7 +20,7 @@ api.interceptors.response.use(
 
 const apiService = {
   // ============================================================================
-  // 🔐 AUTENTICACIÓN - ENDPOINTS EXACTOS DE TU BACKEND
+  // 🔐 AUTENTICACIÓN - ENDPOINTS 
   // ============================================================================
   
   async login(credentials) {
@@ -54,7 +54,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 📚 HISTORIAS - ENDPOINTS EXACTOS DE TU BACKEND
+  // 📚 HISTORIAS - ENDPOINTS 
   // ============================================================================
   
   async obtenerTemas() {
@@ -92,7 +92,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // ❓ PREGUNTAS - ENDPOINTS EXACTOS DE TU BACKEND
+  // ❓ PREGUNTAS - ENDPOINTS EXACTOS
   // ============================================================================
   
   async responderPregunta(datosRespuesta) {
@@ -154,7 +154,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 👨‍🎓 ALUMNO - ENDPOINTS EXACTOS DE TU BACKEND
+  // 👨‍🎓 ALUMNO - ENDPOINTS 
   // ============================================================================
   
   async obtenerHistorialAlumno(alumnoId) {
@@ -175,7 +175,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 👩‍🏫 DOCENTE - ENDPOINTS EXACTOS DE TU BACKEND  
+  // 👩‍🏫 DOCENTE - ENDPOINTS EXACTOS 
   // ============================================================================
   
   async obtenerEstudiantesDocente(docenteId) {
@@ -281,7 +281,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 🏆 RANKING - ENDPOINTS EXACTOS DE TU BACKEND
+  // 🏆 RANKING - 
   // ============================================================================
   
   async obtenerRankingClase(docenteId) {
@@ -290,7 +290,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 🏥 HEALTH CHECK - ENDPOINT DE TU BACKEND
+  // 🏥 HEALTH CHECK - 
   // ============================================================================
   
   async healthCheck() {
