@@ -636,28 +636,27 @@ export default {
       try {
         guardandoInfo.value = true
         error.value = ''
-        
+
         console.log('💾 Actualizando información personal...')
-        
+
         // Enviar datos al backend
         const updateData = {
-          user_id: user.value.id,
           nombre: formData.value.nombre,
           email: formData.value.email,
           edad: formData.value.edad,
           institucion: formData.value.institucion,
           grado: formData.value.grado
         }
-        
-        const response = await apiService.actualizarPerfil(updateData)
-        
+
+        const response = await apiService.updateUser(user.value.id, updateData)
+
         // Actualizar datos en el store
         await authStore.updateProfile(response.user, response.profile)
-        
+
         // Actualizar datos locales
         formDataOriginal.value = { ...formData.value }
         editandoInfo.value = false
-        
+
         toastStore.success('Información actualizada correctamente')
         console.log('✅ Información personal actualizada')
         

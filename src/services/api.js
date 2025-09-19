@@ -296,6 +296,12 @@ const apiService = {
   async healthCheck() {
     const response = await api.get('/health')
     return response.data
+  },
+  async actualizarPerfil(updateData) {
+      const response = await api.put(`/api/docentes/${updateData.user_id}/perfil`, {
+          ...updateData
+      })
+      return response.data
   }
 }
 

@@ -198,7 +198,6 @@ export const useAuthStore = defineStore('auth', () => {
       
       // ✅ USAR KEY CORRECTA 'user'
       localStorage.setItem('user', JSON.stringify(user.value))
-      
       console.log('✅ Perfil actualizado exitosamente')
       return response
       
