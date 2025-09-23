@@ -39,6 +39,7 @@ const apiService = {
   },
 
   async updateUser(userId, userData) {
+      console.log(userId, userData)
     const response = await api.put('/auth/update-profile', {
       user_id: userId,
       ...userData

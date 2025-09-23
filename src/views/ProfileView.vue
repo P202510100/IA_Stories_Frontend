@@ -639,15 +639,18 @@ export default {
 
         console.log('💾 Actualizando información personal...')
 
+        console.log("data user: ", user.value)
+
         // Enviar datos al backend
         const updateData = {
+          user_id: user.value.id,
           nombre: formData.value.nombre,
           email: formData.value.email,
           edad: formData.value.edad,
           institucion: formData.value.institucion,
           grado: formData.value.grado
         }
-
+        console.log("updateData: ",updateData)
         const response = await apiService.updateUser(user.value.id, updateData)
 
         // Actualizar datos en el store
