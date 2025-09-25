@@ -57,11 +57,28 @@
             </div>
           </div>
           
-          <div v-if="estudiantes.length > 0" class="estudiantes-grid">
+          <!--  ESTADO VACÍO MEJORADO (cuando no hay estudiantes asociados) -->
+          <div v-if="!loading && estudiantes.length === 0" class="empty-state">
+            <div class="empty-icon">👥</div>
+            <h3>No hay estudiantes asociados</h3>
+            <p>Para comenzar, necesitas asociar estudiantes a tu cuenta desde la sección de Gestión de Estudiantes.</p>
+            <router-link to="/gestion-estudiantes" class="btn-primary-empty">
+              📝 Gestionar Estudiantes
+            </router-link>
+            <div class="help-text">
+              <p><strong>¿Cómo asociar estudiantes?</strong></p>
+              <p>1. Ve a Gestión de Estudiantes</p>
+              <p>2. Busca estudiantes registrados en la plataforma</p>
+              <p>3. Haz clic en "Asociar" junto al estudiante deseado</p>
+            </div>
+          </div>
+          
+          <!-- Lista de estudiantes reales (solo cuando hay datos) -->
+          <div v-else-if="estudiantes.length > 0" class="estudiantes-grid">
             <div
               v-for="estudiante in estudiantes"
-              :key="estudiante.id"
-              @click="verDetalleEstudiante(estudiante.id)"
+              :key="estudiante.id || estudiante.user_id || estudiante.alumno_id"
+              @click="verDetalleEstudiante(estudiante.id || estudiante.user_id || estudiante.alumno_id)"
               class="estudiante-card"
             >
               <div class="estudiante-avatar">
@@ -92,12 +109,6 @@
               </div>
             </div>
           </div>
-          
-          <div v-else-if="!loading" class="empty-students">
-            <div class="empty-icon">👨‍🎓</div>
-            <h3>No hay estudiantes asignados</h3>
-            <p>Los estudiantes aparecerán aquí cuando se registren y se asignen a tu clase</p>
-          </div>
         </div>
         
         <!-- Ranking de estudiantes -->
@@ -111,10 +122,11 @@
             </select>
           </div>
           
+          <!--  RANKING REAL O VACÍO -->
           <div v-if="rankingEstudiantes.length > 0" class="ranking-list">
             <div
               v-for="(estudiante, index) in rankingEstudiantes"
-              :key="estudiante.id"
+              :key="estudiante.id || estudiante.user_id || estudiante.alumno_id"
               class="ranking-item"
               :class="getRankingClass(index)"
             >
@@ -140,6 +152,13 @@
               </div>
             </div>
           </div>
+          
+          <div v-else class="empty-ranking">
+            <p>🏆 No hay estudiantes con puntuación para mostrar en el ranking</p>
+            <p v-if="estudiantes.length === 0" class="empty-subtitle">
+              Primero asocia estudiantes a tu cuenta
+            </p>
+          </div>
         </div>
         
         <!-- Actividad reciente -->
@@ -149,6 +168,7 @@
             <span class="periodo-actual">Últimos 7 días</span>
           </div>
           
+          <!--  ACTIVIDAD  O VACÍA -->
           <div v-if="actividadReciente.length > 0" class="actividad-list">
             <div
               v-for="actividad in actividadReciente"
@@ -173,6 +193,9 @@
           
           <div v-else class="empty-activity">
             <p>📊 No hay actividad reciente para mostrar</p>
+            <p v-if="estudiantes.length === 0" class="empty-subtitle">
+              La actividad aparecerá cuando tengas estudiantes asociados
+            </p>
           </div>
         </div>
       </div>
@@ -184,7 +207,10 @@
       
       <!-- Error -->
       <div v-if="error" class="error">
-        {{ error }}
+        ⚠️ {{ error }}
+        <button @click="recargarEstudiantes" class="btn-retry">
+          🔄 Reintentar
+        </button>
       </div>
       
     </div>
@@ -223,124 +249,106 @@ export default {
           throw new Error('No se encontró el perfil del docente')
         }
         
-        // Cargar estadísticas generales
+        const docenteId = profile.value.id
+        console.log(`📊 Cargando datos reales para docente ${docenteId}`)
+        
+        //  1. CARGAR ESTUDIANTES 
         try {
-          const statsResponse = await apiService.obtenerEstadisticasDocente(profile.value.id)
-          estadisticas.value = statsResponse
+          console.log('👥 Cargando estudiantes desde backend...')
+          const estudiantesResponse = await apiService.obtenerEstudiantesDocente(docenteId)
+          estudiantes.value = estudiantesResponse.estudiantes || []
+          
+          console.log(`✅ ${estudiantes.value.length} estudiantes reales cargados`)
+          
+          // Calcular estadísticas
+          estadisticas.value = {
+            total_estudiantes: estudiantes.value.length,
+            total_historias: estudiantes.value.reduce((sum, est) => sum + (est.total_historias || 0), 0),
+            total_actividades: estudiantes.value.reduce((sum, est) => sum + (est.actividades_completadas || 0), 0),
+            promedio_puntos: estudiantes.value.length > 0 
+              ? Math.round(estudiantes.value.reduce((sum, est) => sum + (est.puntos_totales || 0), 0) / estudiantes.value.length)
+              : 0
+          }
+          
         } catch (err) {
-          console.error('Error cargando estadísticas:', err)
-          // Usar valores por defecto
+          console.error('❌ Error cargando estudiantes:', err)
+          
+          
+          estudiantes.value = []
           estadisticas.value = {
             total_estudiantes: 0,
             total_historias: 0,
             total_actividades: 0,
             promedio_puntos: 0
           }
-        }
-        
-        // Cargar estudiantes
-        try {
-          const estudiantesResponse = await apiService.obtenerEstudiantesDocente(profile.value.id)
-          estudiantes.value = estudiantesResponse.estudiantes || []
           
-          // Actualizar estadísticas con datos reales
-          estadisticas.value.total_estudiantes = estudiantes.value.length
-        } catch (err) {
-          console.error('Error cargando estudiantes:', err)
-          // Usar datos de demo
-          estudiantes.value = generarEstudiantesDemo()
-          estadisticas.value.total_estudiantes = estudiantes.value.length
+          error.value = 'No se pudieron cargar los estudiantes. Verifica tu conexión y que tengas estudiantes asociados.'
         }
         
-        // Cargar ranking
+        //  2. CARGAR RANKING DESDE ESTUDIANTES
         try {
-          const rankingResponse = await apiService.obtenerRankingEstudiantes(profile.value.id)
-          rankingEstudiantes.value = rankingResponse.ranking || estudiantes.value.slice(0, 5)
-        } catch {
-          rankingEstudiantes.value = [...estudiantes.value].sort((a, b) => (b.puntos_totales || 0) - (a.puntos_totales || 0))
+          if (estudiantes.value.length > 0) {
+            rankingEstudiantes.value = [...estudiantes.value]
+              .filter(est => est.puntos_totales > 0)
+              .sort((a, b) => (b.puntos_totales || 0) - (a.puntos_totales || 0))
+              .slice(0, 5)
+          } else {
+            rankingEstudiantes.value = []
+          }
+        } catch (rankingError) {
+          console.error('❌ Error calculando ranking:', rankingError)
+          rankingEstudiantes.value = []
         }
         
-        // Generar actividad reciente (demo)
-        actividadReciente.value = generarActividadDemo()
+        //  3. GENERAR ACTIVIDAD DESDE ESTUDIANTES 
+        actividadReciente.value = generarActividadDesdeEstudiantesReales()
         
       } catch (err) {
-        console.error('Error cargando datos del dashboard:', err)
-        error.value = 'Error al cargar los datos del dashboard'
+        console.error('❌ Error cargando datos del dashboard:', err)
+        error.value = `Error al cargar los datos: ${err.message}`
       } finally {
         loading.value = false
       }
     }
     
-    const generarEstudiantesDemo = () => {
-      return [
-        {
-          id: 1,
-          nombre: "Ana García",
-          email: "ana.garcia@estudiante.com",
-          total_historias: 5,
-          puntos_totales: 450,
-          nivel_actual: "Explorador",
-          ultima_actividad: new Date().toISOString()
-        },
-        {
-          id: 2,
-          nombre: "Carlos Ruiz",
-          email: "carlos.ruiz@estudiante.com",
-          total_historias: 3,
-          puntos_totales: 320,
-          nivel_actual: "Principiante",
-          ultima_actividad: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: 3,
-          nombre: "María López",
-          email: "maria.lopez@estudiante.com",
-          total_historias: 7,
-          puntos_totales: 680,
-          nivel_actual: "Aventurero",
-          ultima_actividad: new Date(Date.now() - 172800000).toISOString()
+    const generarActividadDesdeEstudiantesReales = () => {
+      if (estudiantes.value.length === 0) {
+        return []
+      }
+      
+      const actividades = []
+      
+      estudiantes.value.forEach(estudiante => {
+        if (estudiante.ultima_actividad) {
+          actividades.push({
+            id: estudiante.user_id || estudiante.alumno_id || estudiante.id,
+            estudiante_nombre: estudiante.nombre,
+            tipo: 'actividad_reciente',
+            descripcion: `Última actividad registrada`,
+            puntos: estudiante.puntos_totales || 0,
+            fecha: estudiante.ultima_actividad
+          })
         }
-      ]
+      })
+      
+      // Ordenar por fecha más reciente y tomar las últimas 5
+      return actividades
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+        .slice(0, 5)
     }
     
-    const generarActividadDemo = () => {
-      return [
-        {
-          id: 1,
-          estudiante_nombre: "Ana García",
-          tipo: "historia_completada",
-          descripcion: "Completó la historia 'Aventura Espacial'",
-          puntos: 85,
-          fecha: new Date(Date.now() - 3600000).toISOString()
-        },
-        {
-          id: 2,
-          estudiante_nombre: "Carlos Ruiz",
-          tipo: "actividad_completada",
-          descripcion: "Respondió correctamente 4/5 preguntas",
-          puntos: 80,
-          fecha: new Date(Date.now() - 7200000).toISOString()
-        },
-        {
-          id: 3,
-          estudiante_nombre: "María López",
-          tipo: "historia_creada",
-          descripcion: "Creó una nueva historia de fantasía",
-          puntos: 50,
-          fecha: new Date(Date.now() - 14400000).toISOString()
-        }
-      ]
-    }
-    
-    const recargarEstudiantes = () => {
-      cargarDatos()
+    const recargarEstudiantes = async () => {
+      console.log('🔄 Recargando datos del dashboard...')
+      await cargarDatos()
     }
     
     const verDetalleEstudiante = (estudianteId) => {
+      console.log(`👤 Navegando a detalle de estudiante ${estudianteId}`)
       router.push(`/estudiante/${estudianteId}`)
     }
     
     const getInitials = (nombre) => {
+      if (!nombre) return '??'
       return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
     }
     
@@ -391,12 +399,15 @@ export default {
         'historia_completada': '📖',
         'actividad_completada': '🎯',
         'historia_creada': '✨',
-        'pregunta_respondida': '❓'
+        'pregunta_respondida': '❓',
+        'actividad_reciente': '📈'
       }
       return iconos[tipo] || '📝'
     }
     
     const formatTimeAgo = (fechaStr) => {
+      if (!fechaStr) return ''
+      
       const fecha = new Date(fechaStr)
       const ahora = new Date()
       const diffMs = ahora - fecha
@@ -408,7 +419,7 @@ export default {
       } else if (diffHours > 0) {
         return `hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
       } else {
-        return 'hace unos minutos'
+        return 'hace unos momentos'
       }
     }
     
@@ -467,6 +478,39 @@ export default {
   font-size: 1.2em;
 }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 15px;
+  padding: 25px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.stat-icon {
+  font-size: 2.5em;
+}
+
+.stat-info h3 {
+  font-size: 2em;
+  font-weight: bold;
+  color: #667eea;
+  margin: 0;
+}
+
+.stat-info p {
+  color: #666;
+  margin: 5px 0 0 0;
+}
+
 .dashboard-sections {
   display: grid;
   gap: 30px;
@@ -512,6 +556,80 @@ export default {
 .btn-refresh:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* ✅ ESTADO VACÍO MEJORADO */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 4em;
+  margin-bottom: 20px;
+  opacity: 0.7;
+}
+
+.empty-state h3 {
+  font-size: 1.5em;
+  color: #333;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.empty-state p {
+  color: #666;
+  margin-bottom: 25px;
+  line-height: 1.6;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.btn-primary-empty {
+  display: inline-block;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  padding: 15px 30px;
+  border-radius: 25px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.1em;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary-empty:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+  color: white;
+  text-decoration: none;
+}
+
+.help-text {
+  margin-top: 30px;
+  padding: 25px;
+  background: #f8f9fa;
+  border-radius: 15px;
+  text-align: left;
+  max-width: 450px;
+  margin-left: auto;
+  margin-right: auto;
+  border-left: 4px solid #667eea;
+}
+
+.help-text strong {
+  color: #667eea;
+  font-size: 1.1em;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.help-text p {
+  margin-bottom: 8px;
+  font-size: 0.95em;
+  color: #555;
 }
 
 .estudiantes-grid {
@@ -614,25 +732,6 @@ export default {
   font-size: 0.9em;
 }
 
-.empty-students {
-  text-align: center;
-  padding: 40px 20px;
-}
-
-.empty-icon {
-  font-size: 3em;
-  margin-bottom: 15px;
-}
-
-.empty-students h3 {
-  color: #667eea;
-  margin-bottom: 10px;
-}
-
-.empty-students p {
-  color: #666;
-}
-
 .ranking-filter {
   padding: 8px 15px;
   border: 2px solid #e1e5e9;
@@ -718,6 +817,18 @@ export default {
   transition: width 0.3s ease;
 }
 
+.empty-ranking, .empty-activity {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.empty-subtitle {
+  color: #999;
+  font-size: 0.9em;
+  margin-top: 5px;
+}
+
 .periodo-actual {
   background: #f1f3f4;
   padding: 5px 12px;
@@ -776,10 +887,36 @@ export default {
   font-weight: 500;
 }
 
-.empty-activity {
+.loading {
   text-align: center;
+  padding: 40px;
+  font-size: 1.2em;
+  color: white;
+}
+
+.error {
+  background: #ffebee;
+  color: #c62828;
   padding: 20px;
-  color: #666;
+  border-radius: 10px;
+  margin: 20px 0;
+  text-align: center;
+  border-left: 4px solid #c62828;
+}
+
+.btn-retry {
+  background: #c62828;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-size: 0.9em;
+}
+
+.btn-retry:hover {
+  background: #b71c1c;
 }
 
 @media (max-width: 768px) {
@@ -805,6 +942,10 @@ export default {
   .actividad-item {
     flex-direction: column;
     text-align: center;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

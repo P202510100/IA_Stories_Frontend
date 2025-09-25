@@ -20,7 +20,7 @@ api.interceptors.response.use(
 
 const apiService = {
   // ============================================================================
-  // 🔐 AUTENTICACIÓN - ENDPOINTS 
+  //  AUTENTICACIÓN - ENDPOINTS 
   // ============================================================================
   
   async login(credentials) {
@@ -55,7 +55,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 📚 HISTORIAS - ENDPOINTS 
+  //  HISTORIAS - ENDPOINTS 
   // ============================================================================
   
   async obtenerTemas() {
@@ -93,14 +93,14 @@ const apiService = {
   },
 
   // ============================================================================
-  // ❓ PREGUNTAS - ENDPOINTS EXACTOS
+  //  PREGUNTAS - ENDPOINTS EXACTOS
   // ============================================================================
   
   async responderPregunta(datosRespuesta) {
     console.log('🎯 DEBUGGING ENDPOINT responderPregunta')
     console.log('📨 Datos recibidos:', datosRespuesta)
     
-    // ✅ FORMATO 1: Como dice la documentación
+    //  FORMATO 1: Como dice la documentación
     const formato1 = {
       historia_id: datosRespuesta.historia_id,
       alumno_id: datosRespuesta.alumno_id,
@@ -108,7 +108,7 @@ const apiService = {
       respuesta: datosRespuesta.respuesta
     }
     
-    // ✅ FORMATO 2: Con "respuestas" plural (según error del backend)
+    //  FORMATO 2: Con "respuestas" plural (según error del backend)
     const formato2 = {
       historia_id: datosRespuesta.historia_id,
       alumno_id: datosRespuesta.alumno_id,
@@ -116,7 +116,7 @@ const apiService = {
       respuestas: [datosRespuesta.respuesta]
     }
     
-    // ✅ FORMATO 3: IDs como strings
+    //  FORMATO 3: IDs como strings
     const formato3 = {
       historia_id: String(datosRespuesta.historia_id),
       alumno_id: String(datosRespuesta.alumno_id),
@@ -124,30 +124,30 @@ const apiService = {
       respuesta: datosRespuesta.respuesta
     }
     
-    console.log('🧪 Probando Formato 1 (documentación):', formato1)
+    console.log('Probando Formato 1 (documentación):', formato1)
     try {
       const response = await api.post('/api/preguntas/responder', formato1)
-      console.log('✅ Formato 1 funcionó!')
+      console.log(' Formato 1 funcionó!')
       return response.data
     } catch (error1) {
-      console.log('❌ Formato 1 falló:', error1.response?.data?.error)
+      console.log(' Formato 1 falló:', error1.response?.data?.error)
       
-      console.log('🧪 Probando Formato 2 (respuestas plural):', formato2)
+      console.log(' Probando Formato 2 (respuestas plural):', formato2)
       try {
         const response = await api.post('/api/preguntas/responder', formato2)
-        console.log('✅ Formato 2 funcionó!')
+        console.log(' Formato 2 funcionó!')
         return response.data
       } catch (error2) {
-        console.log('❌ Formato 2 falló:', error2.response?.data?.error)
+        console.log(' Formato 2 falló:', error2.response?.data?.error)
         
-        console.log('🧪 Probando Formato 3 (IDs como strings):', formato3)
+        console.log(' Probando Formato 3 (IDs como strings):', formato3)
         try {
           const response = await api.post('/api/preguntas/responder', formato3)
           console.log('✅ Formato 3 funcionó!')
           return response.data
         } catch (error3) {
-          console.log('❌ Formato 3 falló:', error3.response?.data?.error)
-          console.error('💥 TODOS LOS FORMATOS FALLARON')
+          console.log(' Formato 3 falló:', error3.response?.data?.error)
+          console.error(' TODOS LOS FORMATOS FALLARON')
           throw error1 // Lanzar el primer error
         }
       }
@@ -155,7 +155,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 👨‍🎓 ALUMNO - ENDPOINTS 
+  //  ALUMNO - ENDPOINTS 
   // ============================================================================
   
   async obtenerHistorialAlumno(alumnoId) {
@@ -176,46 +176,32 @@ const apiService = {
   },
 
   // ============================================================================
-  // 👩‍🏫 DOCENTE - ENDPOINTS EXACTOS 
+  //  DOCENTE - ENDPOINTS EXACTOS 
   // ============================================================================
   
   async obtenerEstudiantesDocente(docenteId) {
-    // ✅ PROBAR MÚLTIPLES RUTAS POSIBLES
+  console.log(` Cargando estudiantes para docente ${docenteId}`)
+  
+  try {
+    //  Probar primero /students (según docente.py del backend)
+    const response = await api.get(`/api/docentes/${docenteId}/students`)
+    console.log('✅ Estudiantes cargados:', response.data)
+    return response.data
+  } catch (error) {
+    console.error(' Error en /students, probando /estudiantes...')
+    
     try {
+      // Fallback a la otra ruta posible
       const response = await api.get(`/api/docentes/${docenteId}/estudiantes`)
       return response.data
-    } catch (error) {
-      console.warn('⚠️ Endpoint /estudiantes no disponible, probando alternativa...')
-      // Fallback: Probar endpoint alternativo
-      try {
-        const response = await api.get(`/api/docentes/${docenteId}/students`)
-        return response.data
-      } catch (error2) {
-        console.warn('⚠️ Endpoint /students tampoco disponible, usando datos demo')
-        // Retornar datos demo si no hay endpoints
-        return {
-          estudiantes: [
-            {
-              id: 1,
-              nombre: "Ana García",
-              email: "ana.garcia@estudiante.com",
-              total_historias: 5,
-              puntos_totales: 450,
-              nivel_actual: "Explorador"
-            },
-            {
-              id: 2,
-              nombre: "Carlos Ruiz", 
-              email: "carlos.ruiz@estudiante.com",
-              total_historias: 3,
-              puntos_totales: 320,
-              nivel_actual: "Principiante"
-            }
-          ]
-        }
-      }
+    } catch (error2) {
+      console.error(' Error cargando estudiantes:', error2.response?.data || error2.message)
+      
+      // NO retornar datos demo, lanzar error
+      throw new Error(`No se pudieron cargar los estudiantes: ${error2.response?.data?.error || error2.message}`)
     }
-  },
+  }
+},
 
   async obtenerAnalyticsDocente(docenteId) {
     try {
@@ -240,7 +226,7 @@ const apiService = {
     }
   },
 
-  // ✅ ALIAS para compatibilidad con DashboardDocente.vue
+  //  ALIAS para compatibilidad con DashboardDocente.vue
   async obtenerEstadisticasDocente(docenteId) {
     return this.obtenerAnalyticsDocente(docenteId)
   },
@@ -282,7 +268,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 🏆 RANKING - 
+  //  RANKING - 
   // ============================================================================
   
   async obtenerRankingClase(docenteId) {
@@ -291,7 +277,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 🏥 HEALTH CHECK - 
+  //  HEALTH CHECK - 
   // ============================================================================
   
   async healthCheck() {

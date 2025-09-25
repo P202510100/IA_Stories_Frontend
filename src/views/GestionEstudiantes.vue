@@ -540,68 +540,76 @@ export default {
     })
     
     const cargarEstudiantes = async () => {
-      cargando.value = true
-      error.value = ''
-      
-      try {
-        // TODO: Llamar API real
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // Datos de ejemplo
-        estudiantes.value = [
-          {
-            id: 1,
-            nombre: 'Ana García',
-            email: 'ana.garcia@estudiante.com',
-            estado: 'activo',
-            puntos_totales: 1250,
-            total_historias: 8,
-            precision: 87,
-            ultima_actividad: new Date(Date.now() - 3600000).toISOString(),
-            fecha_registro: new Date(Date.now() - 2592000000).toISOString()
-          },
-          {
-            id: 2,
-            nombre: 'Carlos Rodríguez',
-            email: 'carlos.rodriguez@estudiante.com',
-            estado: 'activo',
-            puntos_totales: 980,
-            total_historias: 6,
-            precision: 82,
-            ultima_actividad: new Date(Date.now() - 86400000).toISOString(),
-            fecha_registro: new Date(Date.now() - 1814400000).toISOString()
-          },
-          {
-            id: 3,
-            nombre: 'María López',
-            email: 'maria.lopez@estudiante.com',
-            estado: 'nuevo',
-            puntos_totales: 340,
-            total_historias: 2,
-            precision: 75,
-            ultima_actividad: new Date(Date.now() - 172800000).toISOString(),
-            fecha_registro: new Date(Date.now() - 604800000).toISOString()
-          },
-          {
-            id: 4,
-            nombre: 'Diego Martín',
-            email: 'diego.martin@estudiante.com',
-            estado: 'inactivo',
-            puntos_totales: 650,
-            total_historias: 4,
-            precision: 68,
-            ultima_actividad: new Date(Date.now() - 1209600000).toISOString(),
-            fecha_registro: new Date(Date.now() - 5184000000).toISOString()
-          }
-        ]
-        
-      } catch (err) {
-        console.error('Error cargando estudiantes:', err)
-        error.value = 'Error al cargar la lista de estudiantes'
-      } finally {
-        cargando.value = false
-      }
+  cargando.value = true
+  error.value = ''
+  
+  try {
+    console.log('👥 Cargando lista real de estudiantes...')
+    
+    if (!authStore.user?.id || !authStore.profile?.id) {
+      throw new Error('No se encontró el perfil del docente')
     }
+    
+    const docenteId = authStore.profile.id
+    
+    //  USAR API REAL PARA OBTENER ESTUDIANTES
+    const response = await apiService.obtenerEstudiantesDocente(docenteId)
+    
+    // Procesar y formatear 
+    estudiantes.value = (response.estudiantes || []).map(estudiante => ({
+      id: estudiante.id || estudiante.user_id || estudiante.alumno_id,
+      nombre: estudiante.nombre,
+      email: estudiante.email,
+      estado: determinarEstadoEstudiante(estudiante.ultima_actividad),
+      puntos_totales: estudiante.puntos_totales || 0,
+      total_historias: estudiante.total_historias || 0,
+      precision: calcularPrecision(estudiante),
+      ultima_actividad: estudiante.ultima_actividad || null,
+      fecha_registro: estudiante.fecha_registro || estudiante.created_at || new Date().toISOString()
+    }))
+    
+    console.log(`✅ ${estudiantes.value.length} estudiantes  cargados`)
+    
+  } catch (err) {
+    console.error(' Error cargando estudiantes:', err)
+    error.value = 'No se pudieron cargar los estudiantes. Verifica que tengas estudiantes asociados a tu cuenta.'
+    
+    //  dejar vacío
+    estudiantes.value = []
+  } finally {
+    cargando.value = false
+  }
+}
+
+
+const determinarEstadoEstudiante = (ultimaActividad) => {
+  if (!ultimaActividad) return 'inactivo'
+  
+  const ahora = new Date()
+  const fechaActividad = new Date(ultimaActividad)
+  const diferenciaDias = Math.floor((ahora - fechaActividad) / (1000 * 60 * 60 * 24))
+  
+  if (diferenciaDias <= 7) return 'activo'
+  if (diferenciaDias <= 30) return 'nuevo' 
+  return 'inactivo'
+}
+
+const calcularPrecision = (estudiante) => {
+  // Calcular precisión basada en datos  disponibles
+  if (estudiante.respuestas_correctas && estudiante.total_respuestas) {
+    return Math.round((estudiante.respuestas_correctas / estudiante.total_respuestas) * 100)
+  }
+  
+  // Estimación basada en puntos y historias
+  const historias = estudiante.total_historias || 0
+  const puntos = estudiante.puntos_totales || 0
+  
+  if (historias === 0) return 0
+  
+  const promedioPorlHistoria = puntos / historias
+  return Math.min(100, Math.max(0, Math.round((promedioPorlHistoria / 100) * 100)))
+}
+
     
     const getInitials = (nombre) => {
       return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
