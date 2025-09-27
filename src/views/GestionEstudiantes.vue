@@ -180,16 +180,8 @@
                 </span>
               </div>
               
-              <div class="col-puntos">
-                <span class="puntos-valor">{{ estudiante.puntos_totales || 0 }}</span>
-              </div>
-              
               <div class="col-historias">
                 <span class="historias-valor">{{ estudiante.total_historias || 0 }}</span>
-              </div>
-              
-              <div class="col-actividad">
-                <span class="actividad-texto">{{ formatActividad(estudiante.ultima_actividad) }}</span>
               </div>
               
               <div class="col-acciones" @click.stop>
@@ -247,22 +239,9 @@
               
               <div class="tarjeta-stats">
                 <div class="stat-mini">
-                  <span class="stat-valor">{{ estudiante.puntos_totales || 0 }}</span>
-                  <span class="stat-etiqueta">Puntos</span>
-                </div>
-                <div class="stat-mini">
                   <span class="stat-valor">{{ estudiante.total_historias || 0 }}</span>
                   <span class="stat-etiqueta">Historias</span>
                 </div>
-                <div class="stat-mini">
-                  <span class="stat-valor">{{ estudiante.precision || 0 }}%</span>
-                  <span class="stat-etiqueta">Precisión</span>
-                </div>
-              </div>
-              
-              <div class="ultima-actividad">
-                <span class="actividad-label">Última actividad:</span>
-                <span class="actividad-valor">{{ formatActividad(estudiante.ultima_actividad) }}</span>
               </div>
             </div>
             
@@ -444,6 +423,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../components/ToastNotification.vue'
+import apiService from "@/services/api.js";
 
 export default {
   name: 'GestionEstudiantes',
@@ -538,63 +518,14 @@ export default {
         return (actual.puntos_totales || 0) > (mejor.puntos_totales || 0) ? actual : mejor
       })
     })
-    
+
     const cargarEstudiantes = async () => {
       cargando.value = true
       error.value = ''
-      
+
       try {
-        // TODO: Llamar API real
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // Datos de ejemplo
-        estudiantes.value = [
-          {
-            id: 1,
-            nombre: 'Ana García',
-            email: 'ana.garcia@estudiante.com',
-            estado: 'activo',
-            puntos_totales: 1250,
-            total_historias: 8,
-            precision: 87,
-            ultima_actividad: new Date(Date.now() - 3600000).toISOString(),
-            fecha_registro: new Date(Date.now() - 2592000000).toISOString()
-          },
-          {
-            id: 2,
-            nombre: 'Carlos Rodríguez',
-            email: 'carlos.rodriguez@estudiante.com',
-            estado: 'activo',
-            puntos_totales: 980,
-            total_historias: 6,
-            precision: 82,
-            ultima_actividad: new Date(Date.now() - 86400000).toISOString(),
-            fecha_registro: new Date(Date.now() - 1814400000).toISOString()
-          },
-          {
-            id: 3,
-            nombre: 'María López',
-            email: 'maria.lopez@estudiante.com',
-            estado: 'nuevo',
-            puntos_totales: 340,
-            total_historias: 2,
-            precision: 75,
-            ultima_actividad: new Date(Date.now() - 172800000).toISOString(),
-            fecha_registro: new Date(Date.now() - 604800000).toISOString()
-          },
-          {
-            id: 4,
-            nombre: 'Diego Martín',
-            email: 'diego.martin@estudiante.com',
-            estado: 'inactivo',
-            puntos_totales: 650,
-            total_historias: 4,
-            precision: 68,
-            ultima_actividad: new Date(Date.now() - 1209600000).toISOString(),
-            fecha_registro: new Date(Date.now() - 5184000000).toISOString()
-          }
-        ]
-        
+        const data = await apiService.obtenerAlumnos()
+        estudiantes.value = data
       } catch (err) {
         console.error('Error cargando estudiantes:', err)
         error.value = 'Error al cargar la lista de estudiantes'

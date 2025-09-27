@@ -402,13 +402,13 @@ export default {
         }
         
         console.log(`📊 Cargando datos del estudiante ${estudianteId.value}...`)
-        
+
+        console.log('this is student: ', estudianteId.value)
+
         // Cargar información detallada del estudiante desde el backend
-        const response = await apiService.obtenerDetalleEstudiante(
-          profile.value.id, 
-          estudianteId.value
-        )
-        
+        const response = await apiService.obtenerProgreso(estudianteId.value)
+
+        console.log("this is response", response)
         // Procesar respuesta del backend
         estudiante.value = response.estudiante
         estadisticas.value = response.estadisticas

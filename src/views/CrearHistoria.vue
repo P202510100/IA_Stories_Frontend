@@ -235,6 +235,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useHistoriasStore } from '../stores/historias'
+import apiService from "@/services/api.js";
 
 export default {
   name: 'CrearHistoria',
@@ -493,9 +494,30 @@ export default {
       }
     }
 
-    function completarJuego() {
+    async function completarJuego() {
       juegoCompletado.value = true
       console.log('🎉 Juego completado! Puntos totales:', puntosTotales.value)
+
+      try {
+        // Datos para guardar en la BD
+        const datosProgreso = {
+          alumno_id: authStore.profile?.id,
+          historia_id: historiaGenerada.value.id,
+          puntuacion: puntosTotales.value,
+          respuestas_correctas: respuestasUsuario.value.filter(r => r.es_correcta).length,
+          total_preguntas: totalPreguntas.value
+        }
+
+        console.log('📤 Guardando progreso:', datosProgreso)
+
+        // Llamar a la API (debes tener apiService o historiasStore configurado)
+        const response = await apiService.guardarProgreso(datosProgreso)
+
+        console.log('✅ Progreso guardado en backend:', response.data)
+      } catch (err) {
+        console.error('❌ Error guardando progreso:', err)
+        error.value = 'No se pudo guardar el progreso. Intenta más tarde.'
+      }
     }
 
     // ============================================================================

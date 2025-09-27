@@ -157,8 +157,14 @@ const apiService = {
   // ============================================================================
   // 👨‍🎓 ALUMNO - ENDPOINTS 
   // ============================================================================
-  
-  async obtenerHistorialAlumno(alumnoId) {
+    async obtenerAlumnos() {
+        const response = await api.get('/api/alumnos') // 👈 asegúrate que tu backend exponga esta ruta
+        return response.data
+    },
+
+
+
+    async obtenerHistorialAlumno(alumnoId) {
     const response = await api.get(`/api/alumnos/${alumnoId}/historial`)
     return response.data
   },
@@ -275,6 +281,10 @@ const apiService = {
       return { data: blob }
     }
   },
+    async obtenerProgreso(alumnoId) {
+        const response = await api.get(`api/progress/${alumnoId}`);
+        return response.data;
+    },
 
   async obtenerDetalleEstudiante(docenteId, alumnoId) {
     const response = await api.get(`/api/docentes/${docenteId}/students/${alumnoId}/detail`)
@@ -303,7 +313,11 @@ const apiService = {
           ...updateData
       })
       return response.data
-  }
+  },
+    async guardarProgreso(progreso) {
+        return api.post('/progress/save', progreso)
+    }
 }
+
 
 export default apiService

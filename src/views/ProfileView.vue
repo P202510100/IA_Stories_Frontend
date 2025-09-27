@@ -178,7 +178,7 @@
             <div class="intereses-actions">
               <button @click="guardarIntereses" class="btn btn-primary" :disabled="guardandoIntereses">
                 <span v-if="guardandoIntereses">💾 Guardando...</span>
-                <span v-else">💾 Guardar Intereses</span>
+                <span v-else>💾 Guardar Intereses</span>
               </button>
               <button @click="cancelarEdicionIntereses" class="btn btn-secondary">
                 ❌ Cancelar
