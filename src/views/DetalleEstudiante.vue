@@ -204,7 +204,7 @@
             v-for="historia in historiasFiltradas"
             :key="historia.id"
             class="historia-item"
-            @click="verDetalleHistoria(historia.id)"
+            @click="verDetalleHistoria(historia.historia_id)"
           >
             <div class="historia-icon">
               {{ getEmojiTema(historia.tema) }}
@@ -229,20 +229,7 @@
                     {{ historia.preguntas_correctas || 0 }}/{{ historia.total_preguntas || 6 }} correctas
                   </span>
                 </div>
-                <div class="stat-mini">
-                  <span class="stat-icon">⏱️</span>
-                  <span class="stat-text">{{ formatTiempo(historia.tiempo_total || 0) }}</span>
-                </div>
               </div>
-            </div>
-            
-            <div class="historia-estado">
-              <span v-if="historia.completada" class="estado-badge completada">
-                ✅ Completada
-              </span>
-              <span v-else class="estado-badge pendiente">
-                ⏳ En progreso
-              </span>
             </div>
           </div>
         </div>
@@ -435,6 +422,7 @@ export default {
     }
     
     const verDetalleHistoria = (historiaId) => {
+      console.log("click verdetalle historia")
       router.push(`/historia/${historiaId}?modo=revision`)
     }
     

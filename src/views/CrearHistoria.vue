@@ -426,59 +426,25 @@ export default {
 
     async function responderPregunta(opcionSeleccionada) {
       try {
-        console.log('📝 DEBUGGING RESPUESTA COMPLETO')
-        console.log('='.repeat(50))
-        console.log('🎯 Pregunta en curso:', preguntaEnCurso.value)
-        console.log('📊 Historia generada:', historiaGenerada.value)
-        console.log('👤 Profile ID:', authStore.profile?.id)
-        console.log('🔢 Opción seleccionada:', opcionSeleccionada)
-        
-        // ✅ VERIFICAR QUE TENEMOS TODOS LOS DATOS
-        if (!preguntaEnCurso.value?.id) {
-          throw new Error('No se encontró ID de la pregunta')
-        }
-        
-        if (!historiaGenerada.value?.id) {
-          throw new Error('No se encontró ID de la historia')
-        }
-        
-        if (!authStore.profile?.id) {
-          throw new Error('No se encontró ID del alumno')
-        }
-        
-        const datosRespuesta = {
-          historia_id: historiaGenerada.value.id,
-          alumno_id: authStore.profile.id,
-          pregunta_id: preguntaEnCurso.value.id,
-          respuesta: opcionSeleccionada
-        }
-        
-        console.log('📝 Datos finales para enviar:', datosRespuesta)
-        console.log('🔍 Tipos de datos:')
-        console.log('  - historia_id:', typeof datosRespuesta.historia_id, datosRespuesta.historia_id)
-        console.log('  - alumno_id:', typeof datosRespuesta.alumno_id, datosRespuesta.alumno_id)  
-        console.log('  - pregunta_id:', typeof datosRespuesta.pregunta_id, datosRespuesta.pregunta_id)
-        console.log('  - respuesta:', typeof datosRespuesta.respuesta, datosRespuesta.respuesta)
-        console.log('='.repeat(50))
-        
-        // Llamar al backend para enviar respuesta
-        const resultado = await historiasStore.responderPregunta(datosRespuesta)
-        
+        if (!preguntaEnCurso.value) throw new Error("No hay pregunta en curso")
+
+        // Determinar si la respuesta es correcta (local, sin backend)
+        const esCorrecta = opcionSeleccionada === preguntaEnCurso.value.respuesta_correcta
+        const puntosGanados = esCorrecta ? 20 : 0
+
         // Guardar respuesta del usuario
         respuestasUsuario.value.push({
           pregunta_id: preguntaEnCurso.value.id,
           opcion_elegida: opcionSeleccionada,
-          es_correcta: resultado.es_correcta,
-          puntos_ganados: resultado.puntos_ganados || (resultado.es_correcta ? 20 : 0),
-          explicacion: resultado.explicacion
+          es_correcta: esCorrecta,
+          puntos_ganados: puntosGanados,
+          explicacion: preguntaEnCurso.value.explicacion || ''
         })
-        
-        if (resultado.es_correcta) {
-          puntosTotales.value += (resultado.puntos_ganados || 20)
+
+        if (esCorrecta) {
+          puntosTotales.value += puntosGanados
         }
-        
-        console.log('✅ Respuesta procesada:', resultado)
-        
+
         // Avanzar a siguiente pregunta o completar
         setTimeout(() => {
           if (preguntaActual.value < totalPreguntas.value - 1) {
@@ -486,11 +452,10 @@ export default {
           } else {
             completarJuego()
           }
-        }, 2000) // Mostrar resultado por 2 segundos
-        
+        }, 2000)
       } catch (err) {
         console.error('❌ Error respondiendo pregunta:', err)
-        error.value = 'Error enviando la respuesta: ' + err.message
+        error.value = 'Error procesando la respuesta: ' + err.message
       }
     }
 

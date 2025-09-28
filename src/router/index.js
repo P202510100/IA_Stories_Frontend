@@ -103,11 +103,11 @@ const routes = [
     component: () => import('../views/VerHistoria.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
       title: 'Ver Historia - IaStories'
     },
     props: (route) => ({
-      historiaId: parseInt(route.params.id)
+      historiaId: parseInt(route.params.id),
+      modo: route.query.modo || 'juego'
     })
   },
   
@@ -209,128 +209,122 @@ const router = createRouter({
 // ============================================================================
 // 🛡️ GUARDS DE NAVEGACIÓN (INTEGRADOS CON EL BACKEND)
 // ============================================================================
-
 router.beforeEach(async (to, from, next) => {
-  console.log(`🚀 Navegando a: ${to.path}`)
-  
-  try {
-    // Importar dinámicamente el store de auth
-    const { useAuthStore } = await import('../stores/auth.js')
-    const authStore = useAuthStore()
-    
-    // ============================================================================
-    // 🔄 INICIALIZAR AUTENTICACIÓN SI ES NECESARIO
-    // ============================================================================
-    
-    if (!authStore.user && localStorage.getItem('user')) {
-      console.log('🔄 Inicializando autenticación desde localStorage...')
-      authStore.initAuth()
-    }
+    console.log(`🚀 Navegando a: ${to.path}`)
 
-    const isAuthenticated = authStore.isAuthenticated
-    const userType = authStore.userType
-    const user = authStore.user
+    try {
+        // Importar dinámicamente el store de auth
+        const { useAuthStore } = await import('../stores/auth.js')
+        const authStore = useAuthStore()
 
-    console.log(`📊 Estado de auth: ${isAuthenticated ? 'autenticado' : 'no autenticado'}, tipo: ${userType}`)
+        // ========================================================================
+        // 🔄 INICIALIZAR AUTENTICACIÓN SI ES NECESARIO
+        // ========================================================================
+        if (!authStore.user && localStorage.getItem('user')) {
+            console.log('🔄 Inicializando autenticación desde localStorage...')
+            authStore.initAuth()
+        }
 
-    // ============================================================================
-    // 🚪 VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
-    // ============================================================================
-    
-    if (to.meta.requiresAuth && !isAuthenticated) {
-      console.log('❌ Acceso denegado: requiere autenticación')
-      next('/login')
-      return
-    }
+        const isAuthenticated = authStore.isAuthenticated
+        const userType = authStore.userType
+        const user = authStore.user
 
-    // ============================================================================
-    // 👤 VERIFICAR RUTAS SOLO PARA INVITADOS (NO AUTENTICADOS)
-    // ============================================================================
-    
-    if (to.meta.requiresGuest && isAuthenticated) {
-      console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
-      
-      if (userType === 'alumno') {
-        next('/dashboard-alumno')
-      } else if (userType === 'docente') {
-        next('/dashboard-docente')
-      } else {
-        console.warn('⚠️ Tipo de usuario desconocido:', userType)
-        authStore.logout()
+        console.log(`📊 Estado de auth: ${isAuthenticated ? 'autenticado' : 'no autenticado'}, tipo: ${userType}`)
+
+        // ========================================================================
+        // 🚪 VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
+        // ========================================================================
+        if (to.meta.requiresAuth && !isAuthenticated) {
+            console.log('❌ Acceso denegado: requiere autenticación')
+            next('/login')
+            return
+        }
+
+        // ========================================================================
+        // 👤 VERIFICAR RUTAS SOLO PARA INVITADOS
+        // ========================================================================
+        if (to.meta.requiresGuest && isAuthenticated) {
+            console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
+            if (userType === 'alumno') {
+                next('/dashboard-alumno')
+            } else if (userType === 'docente') {
+                next('/dashboard-docente')
+            } else {
+                authStore.logout()
+                next('/login')
+            }
+            return
+        }
+
+        // ========================================================================
+        // 🔐 VERIFICAR TIPO DE USUARIO ESPECÍFICO (GENERAL)
+        // ========================================================================
+        if (to.name !== 'VerHistoria' && to.meta.userType && userType !== to.meta.userType) {
+            console.log(`❌ Acceso denegado: requiere tipo ${to.meta.userType}, usuario es ${userType}`)
+            if (userType === 'alumno') {
+                next('/dashboard-alumno')
+            } else if (userType === 'docente') {
+                next('/dashboard-docente')
+            } else {
+                authStore.logout()
+                next('/login')
+            }
+            return
+        }
+
+        // ========================================================================
+        // 🎯 VALIDACIÓN ESPECIAL PARA VerHistoria
+        // ========================================================================
+        if (to.name === 'VerHistoria') {
+            const historiaId = parseInt(to.params.id)
+            const modo = to.query.modo || 'juego'
+
+            if (isNaN(historiaId) || historiaId <= 0) {
+                console.log('❌ ID de historia inválido')
+                next('/mis-historias')
+                return
+            }
+
+            if (userType === 'alumno' && modo === 'juego') {
+                next() // ✅ alumno puede jugar
+                return
+            }
+
+            if (userType === 'docente' && modo === 'revision') {
+                next() // ✅ docente puede revisar
+                return
+            }
+
+            // ❌ acceso no válido
+            console.log('❌ Acceso no válido a VerHistoria')
+            if (userType === 'alumno') {
+                next('/dashboard-alumno')
+            } else if (userType === 'docente') {
+                next('/dashboard-docente')
+            } else {
+                authStore.logout()
+                next('/login')
+            }
+            return
+        }
+
+        // ========================================================================
+        // 📋 ESTABLECER TÍTULO DE LA PÁGINA
+        // ========================================================================
+        document.title = to.meta.title || 'IaStories - Educación con IA'
+
+        // ========================================================================
+        // ✅ PERMITIR NAVEGACIÓN
+        // ========================================================================
+        console.log('✅ Navegación permitida')
+        next()
+
+    } catch (error) {
+        console.error('❌ Error en guard de navegación:', error)
+        localStorage.removeItem('user')
+        localStorage.removeItem('profile')
         next('/login')
-      }
-      return
     }
-
-    // ============================================================================
-    // 🔐 VERIFICAR TIPO DE USUARIO ESPECÍFICO
-    // ============================================================================
-    
-    if (to.meta.userType && userType !== to.meta.userType) {
-      console.log(`❌ Acceso denegado: requiere tipo ${to.meta.userType}, usuario es ${userType}`)
-      
-      // Redirigir al dashboard correspondiente
-      if (userType === 'alumno') {
-        next('/dashboard-alumno')
-      } else if (userType === 'docente') {
-        next('/dashboard-docente')
-      } else {
-        console.warn('⚠️ Tipo de usuario inválido, cerrando sesión')
-        authStore.logout()
-        next('/login')
-      }
-      return
-    }
-
-    // ============================================================================
-    // 📝 VALIDACIONES ESPECÍFICAS DE RUTAS
-    // ============================================================================
-    
-    // Validar ID de historia para rutas que lo requieren
-    if (to.name === 'VerHistoria' && to.params.id) {
-      const historiaId = parseInt(to.params.id)
-      if (isNaN(historiaId) || historiaId <= 0) {
-        console.log('❌ ID de historia inválido')
-        next('/mis-historias')
-        return
-      }
-    }
-    
-    // Validar ID de estudiante para rutas de docente
-    if (to.name === 'DetalleEstudiante' && to.params.id) {
-      const estudianteId = parseInt(to.params.id)
-      if (isNaN(estudianteId) || estudianteId <= 0) {
-        console.log('❌ ID de estudiante inválido')
-        next('/dashboard-docente')
-        return
-      }
-    }
-
-    // ============================================================================
-    // 📋 ESTABLECER TÍTULO DE LA PÁGINA
-    // ============================================================================
-    
-    if (to.meta.title) {
-      document.title = to.meta.title
-    } else {
-      document.title = 'IaStories - Educación con IA'
-    }
-
-    // ============================================================================
-    // ✅ PERMITIR NAVEGACIÓN
-    // ============================================================================
-    
-    console.log('✅ Navegación permitida')
-    next()
-    
-  } catch (error) {
-    console.error('❌ Error en guard de navegación:', error)
-    
-    // En caso de error, limpiar autenticación y redirigir al login
-    localStorage.removeItem('user')
-    localStorage.removeItem('profile')
-    next('/login')
-  }
 })
 
 // ============================================================================

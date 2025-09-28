@@ -2,7 +2,7 @@
 <template>
   <div class="ver-historia">
     <div class="container">
-      
+
       <!-- Loading state -->
       <div v-if="loading" class="loading-container">
         <div class="loading-spinner"></div>
@@ -11,7 +11,7 @@
 
       <!-- Main content -->
       <div v-else-if="historia && !error" class="historia-content">
-        
+
         <!-- Header de la historia -->
         <div class="historia-header">
           <button @click="volverAtras" class="btn-back">
@@ -58,10 +58,10 @@
 
           <div class="preguntas-container">
             <div
-              v-for="(pregunta, index) in preguntas"
-              :key="pregunta.id"
-              class="pregunta-card"
-              :class="{ 
+                v-for="(pregunta, index) in preguntas"
+                :key="pregunta.id"
+                class="pregunta-card"
+                :class="{
                 respondida: pregunta.respondida,
                 correcta: pregunta.respondida && pregunta.correcta,
                 incorrecta: pregunta.respondida && !pregunta.correcta
@@ -71,42 +71,36 @@
                 <span class="pregunta-tipo">{{ getTipoPreguntaLabel(pregunta.tipo) }}</span>
                 <span class="pregunta-numero">{{ index + 1 }}/{{ preguntas.length }}</span>
               </div>
-              
+
               <h3 class="pregunta-texto">{{ pregunta.pregunta }}</h3>
-              
+
               <!-- Opciones múltiples -->
               <div v-if="pregunta.tipo_respuesta === 'opcion_multiple'" class="opciones-container">
                 <div
-                  v-for="(opcion, opcionIndex) in pregunta.opciones"
-                  :key="opcionIndex"
-                  @click="responderPregunta(pregunta, opcionIndex)"
-                  :class="[
-                    'opcion',
-                    { 
-                      selected: pregunta.respuesta_alumno === opcionIndex,
-                      disabled: pregunta.respondida
-                    }
-                  ]"
+                    v-for="(opcion, opcionIndex) in pregunta.opciones"
+                    :key="opcionIndex"
+                    @click="responderPregunta(pregunta, opcionIndex)"
+                    :class="[ 'opcion',{ selected: pregunta.respuesta_alumno === opcionIndex, disabled: pregunta.respondida }]"
                 >
                   <span class="opcion-letra">{{ String.fromCharCode(65 + opcionIndex) }})</span>
                   <span class="opcion-texto">{{ opcion }}</span>
                 </div>
               </div>
-              
+
               <!-- Respuesta de texto -->
               <div v-else-if="pregunta.tipo_respuesta === 'texto'" class="respuesta-texto-container">
                 <textarea
-                  v-model="pregunta.respuesta_texto"
-                  @blur="responderPreguntaTexto(pregunta)"
-                  :disabled="pregunta.respondida"
-                  placeholder="Escribe tu respuesta aquí..."
-                  class="respuesta-textarea"
-                  rows="4"
+                    v-model="pregunta.respuesta_texto"
+                    @blur="responderPreguntaTexto(pregunta)"
+                    :disabled="pregunta.respondida"
+                    placeholder="Escribe tu respuesta aquí..."
+                    class="respuesta-textarea"
+                    rows="4"
                 ></textarea>
                 <button
-                  v-if="!pregunta.respondida && pregunta.respuesta_texto"
-                  @click="responderPreguntaTexto(pregunta)"
-                  class="btn-enviar-respuesta"
+                    v-if="!pregunta.respondida && pregunta.respuesta_texto"
+                    @click="responderPreguntaTexto(pregunta)"
+                    class="btn-enviar-respuesta"
                 >
                   Enviar Respuesta
                 </button>
@@ -119,11 +113,7 @@
                 </div>
                 <div v-else class="resultado incorrecto">
                   ❌ Respuesta incorrecta
-                  <button 
-                    v-if="pregunta.puede_repetir"
-                    @click="repetirPregunta(pregunta)"
-                    class="btn-repetir"
-                  >
+                  <button v-if="pregunta.puede_repetir" @click="repetirPregunta(pregunta)" class="btn-repetir">
                     🔄 Intentar de nuevo
                   </button>
                 </div>
@@ -195,17 +185,15 @@ export default {
     const router = useRouter()
     const authStore = useAuthStore()
     const historiasStore = useHistoriasStore()
-    
-    // Estado del componente
+
     const historia = ref(null)
     const preguntas = ref([])
     const loading = ref(true)
     const loadingPreguntas = ref(false)
     const error = ref(null)
 
-    // Computed properties
     const profile = computed(() => authStore.profile)
-    
+
     const personajes = computed(() => {
       if (!historia.value?.personajes) return []
       try {
@@ -218,59 +206,39 @@ export default {
       }
     })
 
-    const preguntasRespondidas = computed(() => 
-      preguntas.value.filter(p => p.respondida).length
-    )
+    const preguntasRespondidas = computed(() => preguntas.value.filter(p => p.respondida).length)
+    const todasPreguntasRespondidas = computed(() => preguntas.value.length > 0 && preguntas.value.every(p => p.respondida))
+    const puntosObtenidos = computed(() => preguntas.value.reduce((total, p) => total + (p.puntos_obtenidos || 0), 0))
 
-    const todasPreguntasRespondidas = computed(() => 
-      preguntas.value.length > 0 && preguntas.value.every(p => p.respondida)
-    )
-
-    const puntosObtenidos = computed(() => 
-      preguntas.value.reduce((total, p) => total + (p.puntos_obtenidos || 0), 0)
-    )
-
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-    
     onMounted(async () => {
       console.log('📖 Iniciando VerHistoria...')
-      
-      // Verificar autenticación
       if (!authStore.isAuthenticated) {
         console.error('❌ Usuario no autenticado')
         router.push('/login')
         return
       }
-
       await cargarHistoriaCompleta()
     })
 
-    // ============================================================================
-    // 📚 CARGA DE DATOS - SOLO BACKEND REAL
-    // ============================================================================
-    
     async function cargarHistoriaCompleta() {
       loading.value = true
       error.value = null
-
       try {
         const historiaId = route.params.id
-        if (!historiaId) {
-          throw new Error('ID de historia no encontrado')
-        }
-
+        if (!historiaId) throw new Error('ID de historia no encontrado')
         console.log(`📖 Cargando historia ${historiaId}...`)
-
-        // Cargar la historia
-        historia.value = await historiasStore.obtenerHistoria(historiaId)
-        
-        // Cargar las preguntas
-        await cargarPreguntas(historiaId)
-
+        const data = await historiasStore.obtenerHistoria(historiaId)
+        historia.value = data
+        preguntas.value = data.preguntas.map(p => ({
+          ...p,
+          respondida: false,
+          respuesta_alumno: null,
+          respuesta_texto: '',
+          correcta: null,
+          puntos_obtenidos: 0,
+          puede_repetir: false
+        }))
         console.log('✅ Historia y preguntas cargadas')
-
       } catch (err) {
         console.error('❌ Error cargando historia:', err)
         error.value = err.message || 'Error cargando la historia'
@@ -281,10 +249,8 @@ export default {
 
     async function cargarPreguntas(historiaId) {
       loadingPreguntas.value = true
-
       try {
         console.log(`❓ Cargando preguntas para historia ${historiaId}...`)
-        
         const preguntasData = await historiasStore.cargarPreguntasHistoria(historiaId)
         preguntas.value = preguntasData.map(p => ({
           ...p,
@@ -295,12 +261,9 @@ export default {
           puntos_obtenidos: 0,
           puede_repetir: false
         }))
-
         console.log(`✅ ${preguntas.value.length} preguntas cargadas`)
-
       } catch (err) {
         console.error('❌ Error cargando preguntas:', err)
-        // No lanzar error, continuar sin preguntas
       } finally {
         loadingPreguntas.value = false
       }
@@ -310,16 +273,10 @@ export default {
       await cargarHistoriaCompleta()
     }
 
-    // ============================================================================
-    // 🎯 GESTIÓN DE PREGUNTAS - SOLO BACKEND REAL
-    // ============================================================================
-    
     async function responderPregunta(pregunta, respuestaIndex) {
       if (pregunta.respondida) return
-
       try {
         console.log(`✍️ Respondiendo pregunta ${pregunta.id} con opción ${respuestaIndex}`)
-
         const datosRespuesta = {
           pregunta_id: pregunta.id,
           historia_id: historia.value.id,
@@ -327,19 +284,14 @@ export default {
           respuesta_seleccionada: respuestaIndex,
           tipo_pregunta: pregunta.tipo
         }
-
         const resultado = await historiasStore.responderPregunta(datosRespuesta)
-
-        // Actualizar pregunta local
         pregunta.respondida = true
         pregunta.respuesta_alumno = respuestaIndex
         pregunta.correcta = resultado.correcta
         pregunta.puntos_obtenidos = resultado.puntos_obtenidos || 0
         pregunta.puede_repetir = !resultado.correcta && resultado.puede_repetir
         pregunta.explicacion = resultado.explicacion
-
         console.log(`✅ Pregunta respondida: ${resultado.correcta ? 'CORRECTA' : 'INCORRECTA'}`)
-
       } catch (err) {
         console.error('❌ Error respondiendo pregunta:', err)
         error.value = 'Error enviando la respuesta'
@@ -348,10 +300,8 @@ export default {
 
     async function responderPreguntaTexto(pregunta) {
       if (pregunta.respondida || !pregunta.respuesta_texto.trim()) return
-
       try {
         console.log(`✍️ Respondiendo pregunta de texto ${pregunta.id}`)
-
         const datosRespuesta = {
           pregunta_id: pregunta.id,
           historia_id: historia.value.id,
@@ -359,17 +309,12 @@ export default {
           respuesta_texto: pregunta.respuesta_texto.trim(),
           tipo_pregunta: pregunta.tipo
         }
-
         const resultado = await historiasStore.responderPregunta(datosRespuesta)
-
-        // Actualizar pregunta local
         pregunta.respondida = true
         pregunta.correcta = resultado.correcta
         pregunta.puntos_obtenidos = resultado.puntos_obtenidos || 0
-        pregunta.puede_repetir = false // Las preguntas de texto generalmente no se repiten
-
+        pregunta.puede_repetir = false
         console.log('✅ Pregunta de texto respondida')
-
       } catch (err) {
         console.error('❌ Error respondiendo pregunta de texto:', err)
         error.value = 'Error enviando la respuesta'
@@ -379,118 +324,40 @@ export default {
     async function repetirPregunta(pregunta) {
       try {
         console.log(`🔄 Repitiendo pregunta ${pregunta.id}`)
-
         await historiasStore.repetirPregunta({
           pregunta_id: pregunta.id,
           alumno_id: (profile.value?.id || authStore.user?.id || JSON.parse(localStorage.getItem('user') || '{}').id)
         })
-
-        // Resetear pregunta para nuevo intento
         pregunta.respondida = false
         pregunta.respuesta_alumno = null
         pregunta.correcta = null
         pregunta.puntos_obtenidos = 0
         pregunta.puede_repetir = false
-
         console.log('✅ Pregunta disponible para repetir')
-
       } catch (err) {
         console.error('❌ Error repitiendo pregunta:', err)
         error.value = 'Error preparando la pregunta para repetir'
       }
     }
 
-    // ============================================================================
-    // 🧭 NAVEGACIÓN
-    // ============================================================================
-    
-    function volverAtras() {
-      router.go(-1)
-    }
+    function volverAtras() { router.go(-1) }
+    function verOtraHistoria() { router.push('/mis-historias') }
+    function crearNuevaHistoria() { router.push('/crear-historia') }
 
-    function verOtraHistoria() {
-      router.push('/mis-historias')
-    }
-
-    function crearNuevaHistoria() {
-      router.push('/crear-historia')
-    }
-
-    // ============================================================================
-    // 🔧 MÉTODOS AUXILIARES
-    // ============================================================================
-    
     function getTemaLabel(tema) {
-      const labels = {
-        'aventura': 'Aventura',
-        'fantasia': 'Fantasía',
-        'espacio': 'Espacio',
-        'naturaleza': 'Naturaleza',
-        'misterio': 'Misterio',
-        'ciencia': 'Ciencia',
-        'deportes': 'Deportes',
-        'amistad': 'Amistad'
-      }
+      const labels = { aventura: 'Aventura', fantasia: 'Fantasía', espacio: 'Espacio', naturaleza: 'Naturaleza', misterio: 'Misterio', ciencia: 'Ciencia', deportes: 'Deportes', amistad: 'Amistad' }
       return labels[tema] || tema
     }
 
     function getTipoPreguntaLabel(tipo) {
-      const labels = {
-        'inferencial': '🤔 Inferencial',
-        'juicio_critico': '⚖️ Juicio Crítico',
-        'creativa': '💡 Creativa'
-      }
+      const labels = { inferencial: '🤔 Inferencial', juicio_critico: '⚖️ Juicio Crítico', creativa: '💡 Creativa' }
       return labels[tipo] || tipo
     }
 
-    function getParrafos(contenido) {
-      if (!contenido) return []
-      return contenido.split('\n').filter(p => p.trim())
-    }
+    function getParrafos(contenido) { if (!contenido) return []; return contenido.split('\n').filter(p => p.trim()) }
+    function formatDate(dateString) { if (!dateString) return ''; try { const date = new Date(dateString); return date.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'}) } catch (e) { return '' } }
 
-    function formatDate(dateString) {
-      if (!dateString) return ''
-      
-      try {
-        const date = new Date(dateString)
-        return date.toLocaleDateString('es-ES', { 
-          day: 'numeric', 
-          month: 'long',
-          year: 'numeric'
-        })
-      } catch (e) {
-        return ''
-      }
-    }
-
-    return {
-      // Estado
-      historia,
-      preguntas,
-      loading,
-      loadingPreguntas,
-      error,
-      
-      // Computed
-      profile,
-      personajes,
-      preguntasRespondidas,
-      todasPreguntasRespondidas,
-      puntosObtenidos,
-      
-      // Métodos
-      recargarHistoria,
-      responderPregunta,
-      responderPreguntaTexto,
-      repetirPregunta,
-      volverAtras,
-      verOtraHistoria,
-      crearNuevaHistoria,
-      getTemaLabel,
-      getTipoPreguntaLabel,
-      getParrafos,
-      formatDate
-    }
+    return { historia, preguntas, loading, loadingPreguntas, error, profile, personajes, preguntasRespondidas, todasPreguntasRespondidas, puntosObtenidos, recargarHistoria, responderPregunta, responderPreguntaTexto, repetirPregunta, volverAtras, verOtraHistoria, crearNuevaHistoria, getTemaLabel, getTipoPreguntaLabel, getParrafos, formatDate }
   }
 }
 </script>

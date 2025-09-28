@@ -315,7 +315,7 @@ const apiService = {
       return response.data
   },
     async guardarProgreso(progreso) {
-        return api.post('/progress/save', progreso)
+        return api.post('/api/progress/save', progreso)
     }
 }
 
