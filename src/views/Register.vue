@@ -1,4 +1,3 @@
-
 <template>
   <div class="register-container">
     <div class="register-card">
@@ -6,23 +5,23 @@
         <h1>✨ Únete a IAStories</h1>
         <p>Crea tu cuenta y comienza tu aventura</p>
       </div>
-      
+
       <form @submit.prevent="handleRegister" class="register-form">
         <!-- Tipo de usuario -->
         <div class="input-group">
           <label>👤 ¿Quién eres?</label>
           <div class="user-type-selection">
-            <div 
-              @click="formData.tipo = 'alumno'"
-              :class="['user-type-card', { active: formData.tipo === 'alumno' }]"
+            <div
+                @click="formData.tipo = 'student'"
+                :class="['user-type-card', { active: formData.tipo === 'student' }]"
             >
               <div class="type-icon">👨‍🎓</div>
               <h3>Estudiante</h3>
               <p>Quiero crear y leer historias</p>
             </div>
-            <div 
-              @click="formData.tipo = 'docente'"
-              :class="['user-type-card', { active: formData.tipo === 'docente' }]"
+            <div
+                @click="formData.tipo = 'teacher'"
+                :class="['user-type-card', { active: formData.tipo === 'teacher' }]"
             >
               <div class="type-icon">👨‍🏫</div>
               <h3>Docente</h3>
@@ -35,49 +34,49 @@
         <div class="input-group">
           <label for="nombre">📝 Nombre completo</label>
           <input
-            id="nombre"
-            v-model="formData.nombre"
-            type="text"
-            placeholder="Tu nombre completo"
-            required
+              id="nombre"
+              v-model="formData.nombre"
+              type="text"
+              placeholder="Tu nombre completo"
+              required
           />
         </div>
-        
+
         <div class="input-group">
           <label for="email">📧 Email</label>
           <input
-            id="email"
-            v-model="formData.email"
-            type="email"
-            placeholder="tu-email@ejemplo.com"
-            required
+              id="email"
+              v-model="formData.email"
+              type="email"
+              placeholder="tu-email@ejemplo.com"
+              required
           />
         </div>
-        
+
         <div class="input-group">
           <label for="password">🔒 Contraseña</label>
           <input
-            id="password"
-            v-model="formData.password"
-            type="password"
-            placeholder="Mínimo 6 caracteres"
-            required
-            minlength="6"
+              id="password"
+              v-model="formData.password"
+              type="password"
+              placeholder="Mínimo 6 caracteres"
+              required
+              minlength="6"
           />
         </div>
 
         <!-- Campos específicos para alumnos -->
-        <div v-if="formData.tipo === 'alumno'" class="alumno-fields">
+        <div v-if="formData.tipo === 'student'" class="alumno-fields">
           <div class="input-group">
-            <label for="edad">🎂 Edad</label>
-            <select id="edad" v-model="formData.edad" required>
-              <option value="">Selecciona tu edad</option>
-              <option v-for="edad in edadesDisponibles" :key="edad" :value="edad">
-                {{ edad }} años
-              </option>
-            </select>
+            <label for="birth_date">🎂 Fecha de nacimiento</label>
+            <input
+                id="birth_date"
+                v-model="formData.birth_date"
+                type="date"
+                required
+            />
           </div>
-          
+
           <div class="input-group">
             <label for="grado">🏫 Grado escolar</label>
             <select id="grado" v-model="formData.grado" required>
@@ -90,39 +89,62 @@
         </div>
 
         <!-- Campos específicos para docentes -->
-        <div v-if="formData.tipo === 'docente'" class="docente-fields">
+        <div v-if="formData.tipo === 'teacher'" class="docente-fields">
           <div class="input-group">
             <label for="institucion">🏫 Institución educativa</label>
             <input
-              id="institucion"
-              v-model="formData.institucion"
-              type="text"
-              placeholder="Nombre de tu colegio/escuela"
-              required
+                id="institucion"
+                v-model="formData.institucion"
+                type="text"
+                placeholder="Nombre de tu colegio/escuela"
+                required
             />
           </div>
-          
+
           <div class="input-group">
-            <label for="materia">📚 Materia principal</label>
+            <label for="alma_mater">🎓 Alma Mater</label>
             <input
-              id="materia"
-              v-model="formData.materia"
-              type="text"
-              placeholder="Ejemplo: Español, Matemáticas, etc."
+                id="alma_mater"
+                v-model="formData.alma_mater"
+                type="text"
+                placeholder="Ejemplo: Universidad de Lima"
+                required
+            />
+          </div>
+
+          <div class="input-group">
+            <label for="degree_level">📜 Nivel académico</label>
+            <input
+                id="degree_level"
+                v-model="formData.degree_level"
+                type="text"
+                placeholder="Ejemplo: Licenciatura, Maestría"
+                required
+            />
+          </div>
+
+          <div class="input-group">
+            <label for="degree_level">Especialización</label>
+            <input
+                id="degree_level"
+                v-model="formData.major"
+                type="text"
+                placeholder="Ejemplo: Magister en Educación"
+                required
             />
           </div>
         </div>
-        
+
         <div v-if="authStore.error" class="error">
           {{ authStore.error }}
         </div>
-        
+
         <button type="submit" class="btn-register" :disabled="!isFormValid || authStore.loading">
           <span v-if="authStore.loading">⏳ Creando cuenta...</span>
           <span v-else>🚀 Crear Mi Cuenta</span>
         </button>
       </form>
-      
+
       <div class="register-footer">
         <p>¿Ya tienes cuenta?</p>
         <router-link to="/login" class="btn-login">
@@ -143,25 +165,18 @@ export default {
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    
+
     const formData = ref({
       tipo: '',
       nombre: '',
       email: '',
       password: '',
-      edad: '',
+      birth_date: '',   // cambiado de edad → birth_date (tipo date)
       grado: '',
       institucion: '',
-      materia: ''
-    })
-
-    // Computed properties
-    const edadesDisponibles = computed(() => {
-      const edades = []
-      for (let i = 5; i <= 18; i++) {
-        edades.push(i)
-      }
-      return edades
+      alma_mater: '',
+      degree_level: '',
+      major: ''
     })
 
     const gradosDisponibles = computed(() => [
@@ -170,41 +185,24 @@ export default {
     ])
 
     const isFormValid = computed(() => {
-      const baseValid = formData.value.tipo && formData.value.nombre && 
-                       formData.value.email && formData.value.password
+      const baseValid = formData.value.tipo && formData.value.nombre &&
+          formData.value.email && formData.value.password
 
-      if (formData.value.tipo === 'alumno') {
-        return baseValid && formData.value.edad && formData.value.grado
-      } else if (formData.value.tipo === 'docente') {
-        return baseValid && formData.value.institucion
+      if (formData.value.tipo === 'student') {
+        return baseValid && formData.value.birth_date && formData.value.grado
+      } else if (formData.value.tipo === 'teacher') {
+        return baseValid && formData.value.institucion && formData.value.alma_mater && formData.value.degree_level && formData.value.major
       }
 
       return baseValid
     })
 
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-    
     onMounted(() => {
-      console.log('📝 Iniciando página de registro...')
-      
-      // Limpiar errores previos
       authStore.clearError()
-      
-      // Si ya está autenticado, redirigir
-      if (authStore.isAuthenticated) {
-        console.log('✅ Usuario ya autenticado, redirigiendo...')
-        redirectToDashboard()
-      }
+      if (authStore.isAuthenticated) redirectToDashboard()
     })
 
-    // ============================================================================
-    // 📝 REGISTRO - SOLO BACKEND REAL
-    // ============================================================================
-    
     const handleRegister = async () => {
-      // Validación adicional
       if (!isFormValid.value) {
         authStore.error = 'Por favor completa todos los campos requeridos'
         return
@@ -216,60 +214,44 @@ export default {
       }
 
       try {
-        console.log('📝 Registrando usuario con backend real...')
-        
-        // Preparar datos para el backend
         const userData = {
-          nombre: formData.value.nombre,
+          fullname: formData.value.nombre,
           email: formData.value.email,
           password: formData.value.password,
           tipo: formData.value.tipo
         }
 
-        // Agregar campos específicos según el tipo
-        if (formData.value.tipo === 'alumno') {
-          userData.edad = parseInt(formData.value.edad)
-          userData.grado = formData.value.grado
-        } else if (formData.value.tipo === 'docente') {
-          userData.institucion = formData.value.institucion
-          userData.materia = formData.value.materia || null
+        if (formData.value.tipo === 'student') {
+          userData.student_profile = {
+            birth_date: formData.value.birth_date,   // ahora se envía como fecha
+            current_grade: formData.value.grado
+          }
+        } else if (formData.value.tipo === 'teacher') {
+          userData.teacher_profile = {
+            current_school: formData.value.institucion,
+            alma_mater: formData.value.alma_mater,
+            degree_level: formData.value.degree_level,
+            major: formData.value.major
+          }
         }
-
-        console.log('📊 Datos del registro:', userData)
-        
-        // Registro usando solo el backend - SIN FALLBACKS
+        console.log('this is userData: ', userData)
         await authStore.register(userData)
-        
-        console.log('✅ Registro exitoso')
-        
-        // Redirigir según el tipo de usuario
         redirectToDashboard()
-        
+
       } catch (error) {
         console.error('❌ Error en registro:', error)
-        // El error ya está manejado en el store
       }
     }
 
     const redirectToDashboard = () => {
       const userType = authStore.userType
-      
-      if (userType === 'alumno') {
-        console.log('🎓 Redirigiendo a dashboard de alumno')
-        router.push('/dashboard-alumno')
-      } else if (userType === 'docente') {
-        console.log('👨‍🏫 Redirigiendo a dashboard de docente')
-        router.push('/dashboard-docente')
-      } else {
-        console.error('❌ Tipo de usuario no reconocido:', userType)
-        authStore.error = 'Tipo de usuario no válido'
-      }
+      if (userType === 'student') router.push('/dashboard-alumno')
+      else if (userType === 'teacher') router.push('/dashboard-docente')
     }
 
     return {
       formData,
       authStore,
-      edadesDisponibles,
       gradosDisponibles,
       isFormValid,
       handleRegister

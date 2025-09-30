@@ -7,7 +7,7 @@
       <div class="profile-header">
         <div class="header-content">
           <div class="user-avatar-large">
-            {{ getUserInitials(user?.nombre) }}
+            {{ getUserInitials(user?.fullname) }}
           </div>
           <div class="user-info">
             <h1>Mi Perfil</h1>
@@ -44,7 +44,7 @@
               <label for="nombre">👤 Nombre completo</label>
               <input
                 id="nombre"
-                v-model="formData.nombre"
+                v-model="formData.fullname"
                 type="text"
                 required
                 minlength="2"
@@ -445,11 +445,15 @@ export default {
     
     // Formularios
     const formData = ref({
-      nombre: '',
+      fullname: '',
       email: '',
-      edad: null,
-      institucion: '',
-      grado: ''
+      birth_date: null,
+      current_grade: '',
+      interests: '',
+      alma_mater: '',
+      current_school: '',
+      degree_level: '',
+      major: ''
     })
     
     const formDataOriginal = ref({})
@@ -567,11 +571,15 @@ export default {
         // Cargar datos básicos del usuario
         if (user.value) {
           formData.value = {
-            nombre: user.value.nombre || '',
+            fullname: user.value.fullname || '',
             email: user.value.email || '',
-            edad: profile.value?.edad || null,
-            institucion: profile.value?.institucion || '',
-            grado: profile.value?.grado || ''
+            birth_date: profile.value?.birth_date || null,
+            current_grade: profile.value?.current_grade || '',
+            current_school: profile.value?.current_school || '',
+            interests: profile.value?.interests || '',
+            alma_mater: profile.value?.alma_mater || '',
+            degree_level: profile.value?.degree_level || '',
+            major: profile.value?.major || '',
           }
           
           formDataOriginal.value = { ...formData.value }

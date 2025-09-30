@@ -11,44 +11,47 @@ export const useAuthStore = defineStore('auth', () => {
   // Computed properties
   const isAuthenticated = computed(() => !!user.value)
   const userType = computed(() => user.value?.tipo || null)
-  const isAlumno = computed(() => userType.value === 'alumno')
-  const isDocente = computed(() => userType.value === 'docente')
+  const isAlumno = computed(() => userType.value === 'student')
+  const isDocente = computed(() => userType.value === 'teacher')
   
   // ✅ PROFILE que tus componentes esperan
   const profile = computed(() => {
     if (!user.value) return null
     
     // Para docentes, usar docente_id como id
-    if (user.value.tipo === 'docente') {
+    if (user.value.tipo === 'teacher') {
       return {
-        id: user.value.docente_id,
-        user_id: user.value.id,
-        nombre: user.value.nombre,
+        id: user.value.teacher_profile.id,
+        user_id: user.value.teacher_profile.user_id,
+        fullname: user.value.fullname,
         email: user.value.email,
-        institucion: user.value.institucion
+        current_school: user.value.teacher_profile.current_school,
+        alma_mater: user.value.teacher_profile.alma_mater,
+        major: user.value.teacher_profile.major,
       }
     }
     
     // Para alumnos, usar alumno_id como id  
-    if (user.value.tipo === 'alumno') {
+    if (user.value.tipo === 'student') {
       return {
-        id: user.value.alumno_id,
-        user_id: user.value.id,
-        nombre: user.value.nombre,
+        id: user.value.student_profile.id,
+        user_id: user.value.student_profile.user_id,
+        fullname: user.value.fullname,
         email: user.value.email,
-        edad: user.value.edad,
-        grado: user.value.grado,
-        intereses: user.value.intereses
+        birth_date: user.value.student_profile.birth_date,
+        current_grade: user.value.student_profile.current_grade,
+        interests: user.value.student_profile.interests,
+        total_points: user.value.student_profile.points,
+        current_level: user.value.student_profile.current_level,
       }
     }
-    
     return null
   })
 
   // ✅ FUNCIÓN INIT CORREGIDA - USA LA KEY CORRECTA
   function initAuth() {
     console.log('🔄 Inicializando autenticación...')
-    
+    console.log('this is user type: ', userType)
     try {
       const userData = localStorage.getItem('user') // ← KEY CORRECTA que usa tu frontend
       if (userData) {
@@ -56,8 +59,10 @@ export const useAuthStore = defineStore('auth', () => {
         
         // ✅ VALIDAR estructura del usuario
         if (parsedUser && parsedUser.tipo && parsedUser.id) {
-          user.value = parsedUser
-          console.log('✅ Usuario restaurado:', parsedUser.nombre, `(${parsedUser.tipo})`)
+          user.value = parsedUser;
+          console.log(user.value.tipo);
+          console.log("this is profile: ", profile);
+          console.log('✅ Usuario restaurado:', parsedUser.fullname, `(${parsedUser.tipo})`)
           console.log('📊 IDs importantes:', {
             user_id: parsedUser.id,
             alumno_id: parsedUser.alumno_id,
@@ -88,17 +93,17 @@ export const useAuthStore = defineStore('auth', () => {
       if (!response.user || !response.user.tipo) {
         throw new Error('Respuesta del servidor inválida')
       }
-      
+
       user.value = response.user
-      
+      console.log('this is user value: ', user.value)
       // ✅ USAR KEY CORRECTA 'user' (no 'iastories_user')
       localStorage.setItem('user', JSON.stringify(response.user))
       
       console.log('✅ Login exitoso:', response.user.nombre, `(${response.user.tipo})`)
       console.log('📊 IDs guardados:', {
-        user_id: response.user.id,
-        alumno_id: response.user.alumno_id,
-        docente_id: response.user.docente_id
+        user_id: response.id,
+        alumno_id: response.alumno_id,
+        docente_id: response.docente_id
       })
       
       return response
@@ -122,23 +127,21 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       console.log('📝 Registrando usuario:', userData.email, `(${userData.tipo})`)
       
-      const response = await apiService.register(userData)
-      
-      if (!response.user || !response.user.tipo) {
+      const response = await apiService.register(userData);
+      console.log('this is response user: ', response)
+      if (!response.id || !response.tipo) {
         throw new Error('Respuesta del servidor inválida')
       }
-      
-      user.value = response.user
+
+
+
+      user.value = response
       
       // ✅ USAR KEY CORRECTA 'user'
-      localStorage.setItem('user', JSON.stringify(response.user))
+      localStorage.setItem('user', JSON.stringify(response))
       
-      console.log('✅ Registro exitoso:', response.user.nombre, `(${response.user.tipo})`)
-      console.log('📊 IDs guardados:', {
-        user_id: response.user.id,
-        alumno_id: response.user.alumno_id,
-        docente_id: response.user.docente_id
-      })
+      console.log('✅ Registro exitoso:', response.name, `(${response.tipo})`)
+
       
       return response
       

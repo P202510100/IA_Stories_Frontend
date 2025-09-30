@@ -2,7 +2,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: 'http://localhost:8000/api/v1',
   headers: {
     'Content-Type': 'application/json'
   },
@@ -24,7 +24,16 @@ const apiService = {
   // ============================================================================
   
   async login(credentials) {
-    const response = await api.post('/auth/login', credentials)
+    const params = new URLSearchParams()
+    params.append('username', credentials.email)
+    params.append('password', credentials.password)
+    params.append('grant_type', 'password')
+
+    const response = await api.post('/auth/login', params, {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    })
     return response.data
   },
 

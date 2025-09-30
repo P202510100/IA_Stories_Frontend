@@ -128,13 +128,15 @@ export default {
     }
 
     const redirectToDashboard = () => {
-      
+
+      console.log('this is authstore: ', authStore.user.fullname)
+
       const userType = authStore.user?.tipo
       
-      if (userType === 'alumno') {
+      if (userType === 'student') {
         console.log('🎓 Redirigiendo a dashboard de alumno')
         router.push('/dashboard-alumno')
-      } else if (userType === 'docente') {
+      } else if (userType === 'teacher') {
         console.log('👨‍🏫 Redirigiendo a dashboard de docente')
         router.push('/dashboard-docente')
       } else {

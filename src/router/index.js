@@ -18,9 +18,9 @@ const routes = [
       if (user) {
         try {
           const userData = JSON.parse(user)
-          if (userData.tipo === 'alumno') {
+          if (userData.tipo === 'student') {
             return '/dashboard-alumno'
-          } else if (userData.tipo === 'docente') {
+          } else if (userData.tipo === 'teacher') {
             return '/dashboard-docente'
           }
         } catch (e) {
@@ -70,7 +70,7 @@ const routes = [
     component: () => import('../views/DashboardAlumno.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Dashboard - IaStories'
     }
   },
@@ -81,7 +81,7 @@ const routes = [
     component: () => import('../views/CrearHistoria.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Crear Historia - IaStories'
     }
   },
@@ -92,7 +92,7 @@ const routes = [
     component: () => import('../views/MisHistorias.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Mis Historias - IaStories'
     }
   },
@@ -117,7 +117,7 @@ const routes = [
     component: () => import('../views/RankingView.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Ranking - IaStories'
     }
   },
@@ -131,7 +131,7 @@ const routes = [
     component: () => import('../views/DashboardDocente.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'docente',
+      userType: 'teacher',
       title: 'Dashboard Docente - IaStories'
     }
   },
@@ -142,7 +142,7 @@ const routes = [
     component: () => import('../views/DetalleEstudiante.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'docente',
+      userType: 'teacher',
       title: 'Detalle Estudiante - IaStories'
     },
     props: (route) => ({
@@ -156,7 +156,7 @@ const routes = [
     component: () => import('../views/GestionEstudiantes.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'docente',
+      userType: 'teacher',
       title: 'Gestión de Estudiantes - IaStories'
     }
   },
@@ -245,9 +245,9 @@ router.beforeEach(async (to, from, next) => {
         // ========================================================================
         if (to.meta.requiresGuest && isAuthenticated) {
             console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
-            if (userType === 'alumno') {
+            if (userType === 'student') {
                 next('/dashboard-alumno')
-            } else if (userType === 'docente') {
+            } else if (userType === 'teacher') {
                 next('/dashboard-docente')
             } else {
                 authStore.logout()
@@ -261,9 +261,9 @@ router.beforeEach(async (to, from, next) => {
         // ========================================================================
         if (to.name !== 'VerHistoria' && to.meta.userType && userType !== to.meta.userType) {
             console.log(`❌ Acceso denegado: requiere tipo ${to.meta.userType}, usuario es ${userType}`)
-            if (userType === 'alumno') {
+            if (userType === 'student') {
                 next('/dashboard-alumno')
-            } else if (userType === 'docente') {
+            } else if (userType === 'teacher') {
                 next('/dashboard-docente')
             } else {
                 authStore.logout()
@@ -285,21 +285,21 @@ router.beforeEach(async (to, from, next) => {
                 return
             }
 
-            if (userType === 'alumno' && modo === 'juego') {
+            if (userType === 'student' && modo === 'juego') {
                 next() // ✅ alumno puede jugar
                 return
             }
 
-            if (userType === 'docente' && modo === 'revision') {
+            if (userType === 'teacher' && modo === 'revision') {
                 next() // ✅ docente puede revisar
                 return
             }
 
             // ❌ acceso no válido
             console.log('❌ Acceso no válido a VerHistoria')
-            if (userType === 'alumno') {
+            if (userType === 'student') {
                 next('/dashboard-alumno')
-            } else if (userType === 'docente') {
+            } else if (userType === 'teacher') {
                 next('/dashboard-docente')
             } else {
                 authStore.logout()
@@ -368,9 +368,9 @@ router.onError((error, to, from) => {
     const user = localStorage.getItem('user')
     if (user) {
       const userData = JSON.parse(user)
-      if (userData.tipo === 'alumno') {
+      if (userData.tipo === 'student') {
         router.push('/dashboard-alumno')
-      } else if (userData.tipo === 'docente') {
+      } else if (userData.tipo === 'teacher') {
         router.push('/dashboard-docente')
       } else {
         router.push('/login')

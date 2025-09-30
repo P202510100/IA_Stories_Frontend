@@ -6,7 +6,7 @@
       <!-- Header con bienvenida -->
       <div class="welcome-header">
         <div class="welcome-content">
-          <h1>¡Hola, {{ profile?.nombre || 'Explorador' }}! 👋</h1>
+          <h1>¡Hola, {{ profile?.fullname || 'Explorador' }}! 👋</h1>
           <p>¿Listo para tu próxima aventura?</p>
         </div>
         <div class="level-badge" v-if="estadisticas">
@@ -180,7 +180,7 @@ export default {
     
     onMounted(async () => {
       console.log('🏠 Iniciando Dashboard Alumno...')
-      
+      console.log('profile in dashbaordlaumno: ', profile._value.name)
       // Verificar autenticación
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         console.error('❌ Acceso no autorizado')
