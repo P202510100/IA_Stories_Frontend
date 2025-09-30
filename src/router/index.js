@@ -1,36 +1,56 @@
-// router/index.js - INTEGRADO 100% CON EL BACKEND
 import { createRouter, createWebHistory } from 'vue-router'
 
 // ============================================================================
-// 📍 DEFINICIÓN DE RUTAS
+//  DEFINICIÓN DE RUTAS
 // ============================================================================
 
 const routes = [
   // ============================================================================
-  // 🏠 RUTAS PÚBLICAS (NO AUTENTICADAS)
+  //  RUTA RAÍZ - 
   // ============================================================================
   {
     path: '/',
-    name: 'Home',
-    redirect: (to) => {
-      // Verificar si hay usuario autenticado en localStorage
-      const user = localStorage.getItem('user')
-      if (user) {
-        try {
-          const userData = JSON.parse(user)
-          if (userData.tipo === 'alumno') {
-            return '/dashboard-alumno'
-          } else if (userData.tipo === 'docente') {
-            return '/dashboard-docente'
-          }
-        } catch (e) {
-          console.error('Error parsing user data:', e)
-        }
-      }
-      return '/login'
+  name: 'Home',
+  redirect: (to) => {
+    console.log(' Router: Verificando redirección desde:', to.fullPath)
+    
+    
+    const urlParams = new URLSearchParams(to.fullPath.split('?')[1] || '')
+    const forceLogin = urlParams.get('force') === 'true'
+    
+    if (forceLogin) {
+      console.log(' Router: force=true detectado, redirigiendo a login')
+      return '/login?force=true'
     }
+    
+  
+    const user = localStorage.getItem('user')
+    if (user) {
+      try {
+        const userData = JSON.parse(user)
+        console.log(' Router: Usuario encontrado en localStorage:', userData.tipo)
+        
+        if (userData.tipo === 'alumno') {
+          console.log(' Router: Redirigiendo a dashboard alumno')
+          return '/dashboard-alumno'
+        } else if (userData.tipo === 'docente') {
+          console.log(' Router: Redirigiendo a dashboard docente')
+          return '/dashboard-docente'
+        }
+      } catch (e) {
+        console.error(' Router: Error parsing user data:', e)
+        localStorage.removeItem('user')
+      }
+    }
+    
+    console.log(' Router: No hay usuario autenticado, redirigiendo a login')
+    return '/login'
+  }
   },
   
+  // ============================================================================
+  //  RUTAS PÚBLICAS 
+  // ============================================================================
   {
     path: '/login',
     name: 'Login', 
@@ -62,7 +82,7 @@ const routes = [
   },
   
   // ============================================================================
-  // 🎓 RUTAS DE ALUMNO (REQUIEREN AUTENTICACIÓN + TIPO ALUMNO)
+  //  RUTAS DE ALUMNO (REQUIEREN AUTENTICACIÓN + TIPO ALUMNO)
   // ============================================================================
   {
     path: '/dashboard-alumno',
@@ -123,7 +143,7 @@ const routes = [
   },
   
   // ============================================================================
-  // 👨‍🏫 RUTAS DE DOCENTE (REQUIEREN AUTENTICACIÓN + TIPO DOCENTE)
+  // 👨 RUTAS DE DOCENTE (REQUIEREN AUTENTICACIÓN + TIPO DOCENTE)
   // ============================================================================
   {
     path: '/dashboard-docente', 
@@ -162,7 +182,7 @@ const routes = [
   },
   
   // ============================================================================
-  // 👤 RUTAS COMPARTIDAS (REQUIEREN AUTENTICACIÓN)
+  //  RUTAS COMPARTIDAS (REQUIEREN AUTENTICACIÓN)
   // ============================================================================
   {
     path: '/perfil',
@@ -175,7 +195,7 @@ const routes = [
   },
   
   // ============================================================================
-  // ❌ RUTA 404 (CATCH ALL)
+  //  RUTA 404 (CATCH ALL)
   // ============================================================================
   {
     path: '/:pathMatch(.*)*',
@@ -188,7 +208,7 @@ const routes = [
 ]
 
 // ============================================================================
-// 🚀 CONFIGURACIÓN DEL ROUTER
+//  CONFIGURACIÓN DEL ROUTER
 // ============================================================================
 
 const router = createRouter({
@@ -207,11 +227,11 @@ const router = createRouter({
 })
 
 // ============================================================================
-// 🛡️ GUARDS DE NAVEGACIÓN (INTEGRADOS CON EL BACKEND)
+//  GUARDS DE NAVEGACIÓN MEJORADOS
 // ============================================================================
 
 router.beforeEach(async (to, from, next) => {
-  console.log(`🚀 Navegando a: ${to.path}`)
+  console.log(` Navegando a: ${to.path}`)
   
   try {
     // Importar dinámicamente el store de auth
@@ -219,7 +239,7 @@ router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore()
     
     // ============================================================================
-    // 🔄 INICIALIZAR AUTENTICACIÓN SI ES NECESARIO
+    //  INICIALIZAR AUTENTICACIÓN SOLO SI NO ESTÁ INICIALIZADA
     // ============================================================================
     
     if (!authStore.user && localStorage.getItem('user')) {
@@ -231,51 +251,67 @@ router.beforeEach(async (to, from, next) => {
     const userType = authStore.userType
     const user = authStore.user
 
-    console.log(`📊 Estado de auth: ${isAuthenticated ? 'autenticado' : 'no autenticado'}, tipo: ${userType}`)
+    console.log(`📊 Estado auth: ${isAuthenticated ? 'autenticado' : 'no autenticado'}, tipo: ${userType}`)
 
     // ============================================================================
-    // 🚪 VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
+    //  VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
     // ============================================================================
     
     if (to.meta.requiresAuth && !isAuthenticated) {
-      console.log('❌ Acceso denegado: requiere autenticación')
+      console.log(' Acceso denegado: requiere autenticación')
+      // Limpiar datos potencialmente corruptos
+      localStorage.removeItem('user')
       next('/login')
       return
     }
 
     // ============================================================================
-    // 👤 VERIFICAR RUTAS SOLO PARA INVITADOS (NO AUTENTICADOS)
+    //  VERIFICAR RUTAS SOLO PARA INVITADOS (YA AUTENTICADOS)
     // ============================================================================
     
-    if (to.meta.requiresGuest && isAuthenticated) {
-      console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
-      
-      if (userType === 'alumno') {
-        next('/dashboard-alumno')
-      } else if (userType === 'docente') {
-        next('/dashboard-docente')
-      } else {
-        console.warn('⚠️ Tipo de usuario desconocido:', userType)
-        authStore.logout()
-        next('/login')
-      }
-      return
-    }
+   if (to.meta.requiresGuest && isAuthenticated) {
+  
+  // ✅ VERIFICAR SI HAY FORCE=TRUE PARA PERMITIR LOGIN FORZADO
+  const forceLogin = to.query.force === 'true' || new URLSearchParams(to.fullPath.split('?')[1] || '').get('force') === 'true'
+  
+  if (forceLogin) {
+    console.log('🔒 Guard: force=true detectado, permitiendo acceso al login')
+    // Limpiar sesión para force login
+    const { useAuthStore } = await import('../stores/auth.js')
+    const authStore = useAuthStore()
+    authStore.logout()
+    next()
+    return
+  }
+  
+  console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
+  
+  if (userType === 'alumno') {
+    next('/dashboard-alumno')
+  } else if (userType === 'docente') {
+    next('/dashboard-docente')
+  } else {
+    console.warn('⚠️ Tipo de usuario desconocido:', userType)
+    authStore.logout()
+    next('/login')
+  }
+  return
+}
 
     // ============================================================================
-    // 🔐 VERIFICAR TIPO DE USUARIO ESPECÍFICO
+    //  VERIFICAR TIPO DE USUARIO ESPECÍFICO
     // ============================================================================
     
     if (to.meta.userType && userType !== to.meta.userType) {
-      console.log(`❌ Acceso denegado: requiere tipo ${to.meta.userType}, usuario es ${userType}`)
+      console.log(` Acceso denegado: requiere ${to.meta.userType}, usuario es ${userType}`)
       
-      // Redirigir al dashboard correspondiente
+      // Redirigir al dashboard correcto del usuario actual
       if (userType === 'alumno') {
         next('/dashboard-alumno')
       } else if (userType === 'docente') {
         next('/dashboard-docente')
       } else {
-        console.warn('⚠️ Tipo de usuario inválido, cerrando sesión')
+        console.warn(' Tipo de usuario inválido, cerrando sesión')
         authStore.logout()
         next('/login')
       }
@@ -283,14 +319,14 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // ============================================================================
-    // 📝 VALIDACIONES ESPECÍFICAS DE RUTAS
+    //  VALIDACIONES ESPECÍFICAS DE RUTAS
     // ============================================================================
     
     // Validar ID de historia para rutas que lo requieren
     if (to.name === 'VerHistoria' && to.params.id) {
       const historiaId = parseInt(to.params.id)
       if (isNaN(historiaId) || historiaId <= 0) {
-        console.log('❌ ID de historia inválido')
+        console.log(' ID de historia inválido')
         next('/mis-historias')
         return
       }
@@ -300,33 +336,37 @@ router.beforeEach(async (to, from, next) => {
     if (to.name === 'DetalleEstudiante' && to.params.id) {
       const estudianteId = parseInt(to.params.id)
       if (isNaN(estudianteId) || estudianteId <= 0) {
-        console.log('❌ ID de estudiante inválido')
+        console.log(' ID de estudiante inválido')
         next('/dashboard-docente')
         return
       }
     }
 
     // ============================================================================
-    // 📋 ESTABLECER TÍTULO DE LA PÁGINA
+    //  ESTABLECER TÍTULO DE LA PÁGINA
     // ============================================================================
     
-    if (to.meta.title) {
-      document.title = to.meta.title
-    } else {
-      document.title = 'IaStories - Educación con IA'
-    }
+    document.title = to.meta.title || 'IaStories - Educación con IA'
 
     // ============================================================================
-    // ✅ PERMITIR NAVEGACIÓN
+    //  PERMITIR NAVEGACIÓN
     // ============================================================================
     
-    console.log('✅ Navegación permitida')
+    console.log(' Navegación permitida')
     next()
     
   } catch (error) {
-    console.error('❌ Error en guard de navegación:', error)
+    console.error(' Error en guard de navegación:', error)
     
-    // En caso de error, limpiar autenticación y redirigir al login
+    // En caso de error crítico, limpiar todo y redirigir al login
+    try {
+      const { useAuthStore } = await import('../stores/auth.js')
+      const authStore = useAuthStore()
+      authStore.logout()
+    } catch (e) {
+      console.error('Error limpiando store:', e)
+    }
+    
     localStorage.removeItem('user')
     localStorage.removeItem('profile')
     next('/login')
@@ -334,12 +374,11 @@ router.beforeEach(async (to, from, next) => {
 })
 
 // ============================================================================
-// 🔄 HOOK DESPUÉS DE CADA NAVEGACIÓN
+//  HOOK DESPUÉS DE CADA NAVEGACIÓN
 // ============================================================================
 
 router.afterEach((to, from) => {
-  // Log de navegación exitosa
-  console.log(`✅ Navegación completada: ${from.path} → ${to.path}`)
+  console.log(` Navegación completada: ${from.path} → ${to.path}`)
   
   // Cerrar menús móviles si están abiertos
   const mobileMenus = document.querySelectorAll('.mobile-menu, .user-menu, .dropdown-menu')
@@ -351,43 +390,24 @@ router.afterEach((to, from) => {
 })
 
 // ============================================================================
-// ⚠️ MANEJO DE ERRORES DE NAVEGACIÓN
+//  MANEJO DE ERRORES DE NAVEGACIÓN
 // ============================================================================
 
 router.onError((error, to, from) => {
-  console.error('❌ Error de navegación:', error)
+  console.error(' Error de navegación:', error)
   
   // Errores comunes de chunk loading (código dividido)
   if (error.message.includes('Loading chunk') || 
       error.message.includes('Loading CSS chunk') ||
       error.message.includes('Failed to fetch dynamically imported module')) {
-    console.log('🔄 Error de chunk loading, recargando página...')
+    console.log(' Error de chunk loading, recargando página...')
     window.location.reload()
     return
   }
   
-  // Otros errores de navegación
-  console.log('🚨 Error de navegación no recuperable')
-  
-  // Intentar navegar a una ruta segura
-  try {
-    const user = localStorage.getItem('user')
-    if (user) {
-      const userData = JSON.parse(user)
-      if (userData.tipo === 'alumno') {
-        router.push('/dashboard-alumno')
-      } else if (userData.tipo === 'docente') {
-        router.push('/dashboard-docente')
-      } else {
-        router.push('/login')
-      }
-    } else {
-      router.push('/login')
-    }
-  } catch (e) {
-    console.error('Error en recuperación de navegación:', e)
-    router.push('/login')
-  }
+  // Otros errores de navegación - ir siempre al login en caso de error
+  console.log(' Error de navegación no recuperable, redirigiendo al login')
+  router.push('/login')
 })
 
 export default router

@@ -235,6 +235,21 @@ const apiService = {
     return this.obtenerRankingClase(docenteId)
   },
 
+  async obtenerTodosLosEstudiantes() {
+  try {
+    const response = await api.get('/api/alumnos/todos')
+    return response.data
+  } catch (error) {
+    try {
+      const response = await api.get('/api/alumnos')
+      return response.data
+    } catch (error2) {
+      console.error('❌ No se pudo obtener estudiantes:', error2)
+      throw new Error('No se pudo cargar la lista de estudiantes')
+    }
+  }
+},
+  
   async asociarEstudiante(docenteId, alumnoId) {
     const response = await api.post(`/api/docentes/${docenteId}/associate`, {
       alumno_id: alumnoId

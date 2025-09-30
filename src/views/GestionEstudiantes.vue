@@ -49,12 +49,12 @@
       <!-- Acciones principales -->
       <div class="acciones-principales">
         <div class="acciones-grid">
-          <button @click="mostrarModalInvitar = true" class="accion-btn invitar">
-            <div class="accion-icon">➕</div>
-            <div class="accion-content">
-              <h3>Invitar Estudiante</h3>
-              <p>Agrega un nuevo estudiante a tu clase</p>
-            </div>
+          <button @click="abrirModalInvitar" class="accion-btn invitar">
+          <div class="accion-icon">👥</div>
+          <div class="accion-content">
+            <h3>Gestionar Estudiantes</h3>
+            <p>Asigna estudiantes o comparte código de clase</p>
+          </div>
           </button>
           
           <button @click="generarCodigo" class="accion-btn codigo">
@@ -157,7 +157,7 @@
           
           <div class="tabla-body">
             <div
-              v-for="estudiante in estudiantesFiltrados"
+              v-for="estudiante in estudiantesFiltradosModal"
               :key="estudiante.id"
               class="tabla-fila"
               @click="verDetalleEstudiante(estudiante.id)"
@@ -225,7 +225,7 @@
         <!-- Vista de tarjetas -->
         <div v-else-if="vistaActual === 'tarjetas' && estudiantesFiltrados.length > 0" class="estudiantes-grid">
           <div
-            v-for="estudiante in estudiantesFiltrados"
+            v-for="estudiante in estudiantesFiltradosModal"
             :key="estudiante.id"
             class="estudiante-tarjeta"
             @click="verDetalleEstudiante(estudiante.id)"
@@ -293,109 +293,171 @@
         </div>
       </div>
       
-      <!-- Modal Invitar Estudiante -->
-      <div v-if="mostrarModalInvitar" class="modal-overlay" @click="mostrarModalInvitar = false">
-        <div class="modal-content" @click.stop>
-          <h3>➕ Invitar Estudiante</h3>
-          
-          <div class="invite-tabs">
-            <button 
-              @click="tabInvitacion = 'email'" 
-              class="tab-btn"
-              :class="{ active: tabInvitacion === 'email' }"
-            >
-              📧 Por Email
-            </button>
-            <button 
-              @click="tabInvitacion = 'codigo'" 
-              class="tab-btn"
-              :class="{ active: tabInvitacion === 'codigo' }"
-            >
-              🔗 Código de Clase
-            </button>
+     <!-- Modal Gestionar Estudiantes -->
+<div v-if="mostrarModalInvitar" class="modal-overlay" @click="mostrarModalInvitar = false">
+  <div class="modal-content modal-asignar-estudiantes" @click.stop>
+    <h3>👥 Gestionar Estudiantes</h3>
+    
+    <div class="invite-tabs">
+      <!-- ✅ NUEVA PESTAÑA: Asignar Estudiantes -->
+      <button 
+        @click="tabInvitacion = 'asignar'" 
+        class="tab-btn"
+        :class="{ active: tabInvitacion === 'asignar' }"
+      >
+        👥 Asignar Estudiantes
+      </button>
+      
+      <!-- ✅ MANTENER: Código de Clase -->
+      <button 
+        @click="tabInvitacion = 'codigo'" 
+        class="tab-btn"
+        :class="{ active: tabInvitacion === 'codigo' }"
+      >
+        🔗 Código de Clase
+      </button>
+    </div>
+    
+    <!-- ✅ NUEVA PESTAÑA: Asignar Estudiantes -->
+    <div v-if="tabInvitacion === 'asignar'" class="invite-content">
+      <!-- Búsqueda y filtros -->
+      <div class="search-section">
+        <div class="search-box">
+          <input
+            v-model="busquedaEstudiante"
+            type="text"
+            placeholder="🔍 Buscar estudiante por nombre o email..."
+            class="search-input"
+          />
+        </div>
+        
+        <div class="filter-section">
+          <div class="filter-stats">
+            <span class="stat-badge disponibles">
+              📋 {{ estudiantesDisponibles.length }} disponibles
+            </span>
+            <span class="stat-badge asignados">
+              ✅ {{ estudiantesAsignados.length }} en tu clase
+            </span>
           </div>
-          
-          <!-- Invitación por email -->
-          <div v-if="tabInvitacion === 'email'" class="invite-content">
-            <form @submit.prevent="enviarInvitacion">
-              <div class="input-group">
-                <label for="invite-email">📧 Email del estudiante</label>
-                <input
-                  id="invite-email"
-                  v-model="invitacionForm.email"
-                  type="email"
-                  placeholder="estudiante@ejemplo.com"
-                  required
-                />
+        </div>
+      </div>
+
+      <!-- Lista de estudiantes -->
+      <div class="estudiantes-container">
+        <div v-if="cargandoTodosEstudiantes" class="loading-section">
+          <div class="spinner"></div>
+          <p>Cargando estudiantes...</p>
+        </div>
+
+        <div v-else-if="estudiantesFiltradosModal.length === 0" class="empty-section">
+          <div class="empty-icon">👨‍🎓</div>
+          <h4>No se encontraron estudiantes</h4>
+          <p>No hay estudiantes registrados en la aplicación</p>
+        </div>
+
+        <div v-else class="estudiantes-list">
+          <div
+            v-for="estudiante in estudiantesFiltradosModal"
+            :key="estudiante.id"
+            class="estudiante-item"
+            :class="{ 'asignado': estudiante.esta_asignado }"
+          >
+            <div class="estudiante-avatar">
+              {{ getInitials(estudiante.nombre) }}
+            </div>
+            
+            <div class="estudiante-info">
+              <h4>{{ estudiante.nombre }}</h4>
+              <p class="estudiante-email">{{ estudiante.email }}</p>
+              <div class="estudiante-meta">
+                <span v-if="estudiante.grado" class="meta-item">
+                  🎓 {{ estudiante.grado }}
+                </span>
+                <span v-if="estudiante.edad" class="meta-item">
+                  👶 {{ estudiante.edad }} años
+                </span>
               </div>
-              
-              <div class="input-group">
-                <label for="invite-nombre">👤 Nombre del estudiante (opcional)</label>
-                <input
-                  id="invite-nombre"
-                  v-model="invitacionForm.nombre"
-                  type="text"
-                  placeholder="Nombre del estudiante"
-                />
+              <div v-if="estudiante.intereses?.length" class="estudiante-intereses">
+                <span
+                  v-for="interes in estudiante.intereses.slice(0, 3)"
+                  :key="interes"
+                  class="interes-tag"
+                >
+                  {{ interes }}
+                </span>
               </div>
-              
-              <div class="input-group">
-                <label for="invite-mensaje">💌 Mensaje personalizado (opcional)</label>
-                <textarea
-                  id="invite-mensaje"
-                  v-model="invitacionForm.mensaje"
-                  placeholder="Mensaje de invitación personalizado..."
-                  rows="3"
-                ></textarea>
-              </div>
-              
-              <div class="modal-form-actions">
-                <button type="submit" class="btn btn-primary" :disabled="enviandoInvitacion">
-                  <span v-if="enviandoInvitacion">📤 Enviando...</span>
-                  <span v-else>📤 Enviar Invitación</span>
-                </button>
-                <button @click="mostrarModalInvitar = false" type="button" class="btn btn-secondary">
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-          
-          <!-- Código de clase -->
-          <div v-if="tabInvitacion === 'codigo'" class="invite-content">
-            <div class="codigo-clase-section">
-              <div class="codigo-display">
-                <h4>Tu código de clase:</h4>
-                <div class="codigo-valor">
-                  <span class="codigo-texto">{{ codigoClase }}</span>
-                  <button @click="copiarCodigo" class="btn-copiar" :class="{ copiado: codigoCopiado }">
-                    {{ codigoCopiado ? '✅' : '📋' }}
-                  </button>
-                </div>
-              </div>
-              
-              <div class="codigo-instrucciones">
-                <h4>Instrucciones para estudiantes:</h4>
-                <ol>
-                  <li>Regístrate en IaStories como estudiante</li>
-                  <li>Ve a "Unirse a Clase"</li>
-                  <li>Ingresa el código: <strong>{{ codigoClase }}</strong></li>
-                  <li>¡Listo! Aparecerás en tu lista de estudiantes</li>
-                </ol>
-              </div>
-              
-              <div class="codigo-acciones">
-                <button @click="generarNuevoCodigo" class="btn btn-secondary">
-                  🔄 Generar Nuevo Código
-                </button>
-                <button @click="compartirCodigo" class="btn btn-primary">
-                  📱 Compartir Código
-                </button>
-              </div>
+            </div>
+
+            <div class="estudiante-actions">
+              <button
+                v-if="!estudiante.esta_asignado"
+                @click="asignarEstudiante(estudiante)"
+                class="btn-asignar"
+                :disabled="asignandoEstudiante === estudiante.id"
+              >
+                <span v-if="asignandoEstudiante === estudiante.id">⏳</span>
+                <span v-else>➕ Asignar</span>
+              </button>
+
+              <button
+                v-else
+                @click="desasignarEstudiante(estudiante)"
+                class="btn-desasignar"
+                :disabled="desasignandoEstudiante === estudiante.id"
+              >
+                <span v-if="desasignandoEstudiante === estudiante.id">⏳</span>
+                <span v-else>➖ Quitar</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button @click="refrescarEstudiantes" class="btn-refresh" :disabled="cargandoTodosEstudiantes">
+          🔄 Actualizar Lista
+        </button>
+      </div>
+    </div>
+    
+    <!-- ✅ MANTENER: Código de clase (IGUAL QUE ANTES) -->
+    <div v-if="tabInvitacion === 'codigo'" class="invite-content">
+      <div class="codigo-clase-section">
+        <div class="codigo-display">
+          <h4>Tu código de clase:</h4>
+          <div class="codigo-valor">
+            <span class="codigo-texto">{{ codigoClase }}</span>
+            <button @click="copiarCodigo" class="btn-copiar" :class="{ copiado: codigoCopiado }">
+              {{ codigoCopiado ? '✅' : '📋' }}
+            </button>
+          </div>
+        </div>
+        
+        <div class="codigo-instrucciones">
+          <h4>Instrucciones para estudiantes:</h4>
+          <ol>
+            <li>Regístrate en IaStories como estudiante</li>
+            <li>Ve a "Unirse a Clase"</li>
+            <li>Ingresa el código: <strong>{{ codigoClase }}</strong></li>
+            <li>¡Listo! Aparecerás en tu lista de estudiantes</li>
+          </ol>
+        </div>
+        
+        <div class="codigo-acciones">
+          <button @click="generarNuevoCodigo" class="btn btn-secondary">
+            🔄 Generar Nuevo Código
+          </button>
+          <button @click="compartirCodigo" class="btn btn-primary">
+            📱 Compartir Código
+          </button>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+</div>
       
       <!-- Modal Confirmación Desvinculación -->
       <div v-if="mostrarModalDesvinculacion" class="modal-overlay" @click="mostrarModalDesvinculacion = false">
@@ -444,6 +506,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../components/ToastNotification.vue'
+import apiService from '../services/api'
 
 export default {
   name: 'GestionEstudiantes',
@@ -460,6 +523,12 @@ export default {
     const ordenFiltro = ref('nombre')
     const vistaActual = ref('tarjetas')
     const dropdownActivo = ref(null)
+
+    const busquedaEstudiante = ref('')
+    const todosLosEstudiantes = ref([])
+    const cargandoTodosEstudiantes = ref(false)
+    const asignandoEstudiante = ref(null)
+    const desasignandoEstudiante = ref(null)
     
     const mostrarModalInvitar = ref(false)
     const mostrarModalDesvinculacion = ref(false)
@@ -482,6 +551,10 @@ export default {
     
     const estudiantesFiltrados = computed(() => {
       let resultado = [...estudiantes.value]
+
+      
+
+
       
       // Filtrar por texto de búsqueda
       if (busquedaTexto.value) {
@@ -515,7 +588,35 @@ export default {
       
       return resultado
     })
-    
+    const estudiantesDisponibles = computed(() => {
+  return todosLosEstudiantes.value.filter(e => !e.esta_asignado)
+})
+
+const estudiantesAsignados = computed(() => {
+  return todosLosEstudiantes.value.filter(e => e.esta_asignado)
+})
+
+const estudiantesFiltradosModal = computed(() => {
+   if (!todosLosEstudiantes.value) return []
+  let resultado = [...todosLosEstudiantes.value]
+  
+  if (busquedaEstudiante.value.trim()) {
+    const termino = busquedaEstudiante.value.toLowerCase().trim()
+    resultado = resultado.filter(estudiante =>
+      estudiante.nombre.toLowerCase().includes(termino) ||
+      estudiante.email.toLowerCase().includes(termino)
+    )
+  }
+  
+  // Ordenar: primero los no asignados, luego los asignados
+  resultado.sort((a, b) => {
+    if (a.esta_asignado && !b.esta_asignado) return 1
+    if (!a.esta_asignado && b.esta_asignado) return -1
+    return a.nombre.localeCompare(b.nombre)
+  })
+  
+  return resultado
+})
     const estudiantesActivos = computed(() => {
       const unaSemanAtras = new Date()
       unaSemanAtras.setDate(unaSemanAtras.getDate() - 7)
@@ -539,48 +640,47 @@ export default {
       })
     })
     
-    const cargarEstudiantes = async () => {
+   const cargarEstudiantes = async () => {
   cargando.value = true
   error.value = ''
   
   try {
-    console.log('👥 Cargando lista real de estudiantes...')
+    console.log('Cargando lista real de estudiantes...')
     
     if (!authStore.user?.id || !authStore.profile?.id) {
       throw new Error('No se encontró el perfil del docente')
     }
     
     const docenteId = authStore.profile.id
-    
-    //  USAR API REAL PARA OBTENER ESTUDIANTES
     const response = await apiService.obtenerEstudiantesDocente(docenteId)
     
-    // Procesar y formatear 
-    estudiantes.value = (response.estudiantes || []).map(estudiante => ({
-      id: estudiante.id || estudiante.user_id || estudiante.alumno_id,
+    console.log('Response:', response)
+    
+    // El response YA es {estudiantes: [...], total_estudiantes: X}
+    const lista = Array.isArray(response) ? response : (response.estudiantes || [])
+    
+    estudiantes.value = lista.map(estudiante => ({
+      id: estudiante.alumno_id || estudiante.id,
       nombre: estudiante.nombre,
       email: estudiante.email,
-      estado: determinarEstadoEstudiante(estudiante.ultima_actividad),
-      puntos_totales: estudiante.puntos_totales || 0,
-      total_historias: estudiante.total_historias || 0,
-      precision: calcularPrecision(estudiante),
-      ultima_actividad: estudiante.ultima_actividad || null,
-      fecha_registro: estudiante.fecha_registro || estudiante.created_at || new Date().toISOString()
+      estado: 'activo',
+      puntos_totales: 0,
+      total_historias: 0,
+      precision: 0,
+      ultima_actividad: null,
+      fecha_registro: new Date().toISOString()
     }))
     
-    console.log(`✅ ${estudiantes.value.length} estudiantes  cargados`)
+    console.log(`${estudiantes.value.length} estudiantes cargados`)
     
   } catch (err) {
-    console.error(' Error cargando estudiantes:', err)
-    error.value = 'No se pudieron cargar los estudiantes. Verifica que tengas estudiantes asociados a tu cuenta.'
-    
-    //  dejar vacío
+    console.error('Error:', err)
+    error.value = 'No se pudieron cargar los estudiantes'
     estudiantes.value = []
   } finally {
     cargando.value = false
   }
 }
-
 
 const determinarEstadoEstudiante = (ultimaActividad) => {
   if (!ultimaActividad) return 'inactivo'
@@ -801,6 +901,106 @@ const calcularPrecision = (estudiante) => {
       router.push('/dashboard-docente')
     }
     
+
+
+  const cargarTodosLosEstudiantes = async () => {
+  try {
+    cargandoTodosEstudiantes.value = true
+    console.log('📋 Cargando todos los estudiantes registrados...')
+    
+    if (!authStore.user?.id || !authStore.profile?.id) {
+      throw new Error('No se encontró el perfil del docente')
+    }
+    
+    // Obtener todos los estudiantes
+    const response = await apiService.obtenerTodosLosEstudiantes()
+    console.log('✅ Estudiantes obtenidos:', response)
+    
+    // Obtener estudiantes ya asignados al docente
+    const estudiantesAsignadosResponse = await apiService.obtenerEstudiantesDocente(authStore.profile.id)
+    console.log('📊 Estudiantes asignados:', estudiantesAsignadosResponse)
+    
+    const idsAsignados = new Set(
+      estudiantesAsignadosResponse.estudiantes?.map(e => e.user_id || e.alumno_id || e.id) || []
+    )
+    
+    // Marcar cuáles están asignados
+    todosLosEstudiantes.value = (response.alumnos || []).map(estudiante => ({
+      ...estudiante,
+      esta_asignado: idsAsignados.has(estudiante.user_id || estudiante.id)
+    }))
+    
+    console.log(`✅ ${todosLosEstudiantes.value.length} estudiantes cargados`)
+    console.log('📋 Estudiantes disponibles:', todosLosEstudiantes.value.filter(e => !e.esta_asignado).length)
+    console.log('✅ Estudiantes asignados:', todosLosEstudiantes.value.filter(e => e.esta_asignado).length)
+    
+  } catch (error) {
+    console.error('❌ Error cargando estudiantes:', error)
+    toastStore.error('Error al cargar la lista de estudiantes: ' + error.message)
+  } finally {
+    cargandoTodosEstudiantes.value = false
+  }
+}
+
+const asignarEstudiante = async (estudiante) => {
+  try {
+    asignandoEstudiante.value = estudiante.id
+    console.log(`➕ Asignando estudiante ${estudiante.nombre} a la clase...`)
+    
+    await apiService.asociarEstudiante(authStore.profile.id, estudiante.user_id || estudiante.id)
+    
+    const index = todosLosEstudiantes.value.findIndex(e => e.id === estudiante.id)
+    if (index !== -1) {
+      todosLosEstudiantes.value[index].esta_asignado = true
+    }
+    
+    await cargarEstudiantes()
+    
+    toastStore.success(`✅ ${estudiante.nombre} fue asignado a tu clase`)
+    
+  } catch (error) {
+    console.error('❌ Error asignando estudiante:', error)
+    toastStore.error(`Error al asignar a ${estudiante.nombre}`)
+  } finally {
+    asignandoEstudiante.value = null
+  }
+}
+
+const desasignarEstudiante = async (estudiante) => {
+  try {
+    desasignandoEstudiante.value = estudiante.id
+    console.log(`➖ Quitando estudiante ${estudiante.nombre} de la clase...`)
+    
+    await apiService.desvincularEstudiante(authStore.profile.id, estudiante.user_id || estudiante.id)
+    
+    const index = todosLosEstudiantes.value.findIndex(e => e.id === estudiante.id)
+    if (index !== -1) {
+      todosLosEstudiantes.value[index].esta_asignado = false
+    }
+    
+    await cargarEstudiantes()
+    
+    toastStore.success(`➖ ${estudiante.nombre} fue quitado de tu clase`)
+    
+  } catch (error) {
+    console.error('❌ Error desasignando estudiante:', error)
+    toastStore.error(`Error al quitar a ${estudiante.nombre}`)
+  } finally {
+    desasignandoEstudiante.value = null
+  }
+}
+
+const refrescarEstudiantes = () => {
+  cargarTodosLosEstudiantes()
+}
+
+// MODIFICAR el método que abre el modal
+const abrirModalInvitar = () => {
+  mostrarModalInvitar.value = true
+  tabInvitacion.value = 'asignar' //  Abrir directamente en asignar
+  cargarTodosLosEstudiantes() //  Cargar estudiantes
+}
+
     // Cerrar dropdown al hacer click fuera
     const handleClickOutside = (event) => {
       if (!event.target.closest('.acciones-dropdown')) {
@@ -837,6 +1037,19 @@ const calcularPrecision = (estudiante) => {
       codigoClase,
       codigoCopiado,
       invitacionForm,
+      busquedaEstudiante,
+      todosLosEstudiantes,
+      cargandoTodosEstudiantes,
+      asignandoEstudiante,
+      desasignandoEstudiante,
+      estudiantesDisponibles,
+      estudiantesAsignados,
+      estudiantesFiltradosModal,
+      cargarTodosLosEstudiantes,
+      asignarEstudiante,
+      desasignarEstudiante,
+      refrescarEstudiantes,
+      abrirModalInvitar,
       
       // Computed
       user,
@@ -863,7 +1076,12 @@ const calcularPrecision = (estudiante) => {
       compartirCodigo,
       exportarDatos,
       enviarMensajeGrupal,
-      volverAtras
+      volverAtras,
+      cargarTodosLosEstudiantes,
+      asignarEstudiante,
+      desasignarEstudiante,
+      refrescarEstudiantes,
+      abrirModalInvitar
     }
   }
 }
