@@ -1,13 +1,13 @@
 <template>
   <div class="dashboard-docente-container">
     <div class="container">
-      
+
       <!-- Header de bienvenida -->
       <div class="welcome-header">
-        <h1>👨‍🏫 Bienvenido, {{ user.nombre }}</h1>
+        <h1>👨‍🏫 Bienvenido, {{ user.fullname }}</h1>
         <p>Panel de control para gestión de estudiantes</p>
       </div>
-      
+
       <!-- Estadísticas generales -->
       <div class="stats-grid" v-if="estadisticas">
         <div class="stat-card">
@@ -17,7 +17,7 @@
             <p>Estudiantes Activos</p>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">📚</div>
           <div class="stat-info">
@@ -25,7 +25,7 @@
             <p>Historias Creadas</p>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">🎯</div>
           <div class="stat-info">
@@ -33,7 +33,7 @@
             <p>Actividades Completadas</p>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">⭐</div>
           <div class="stat-info">
@@ -42,10 +42,10 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Secciones principales -->
       <div class="dashboard-sections">
-        
+
         <!-- Lista de estudiantes -->
         <div class="section">
           <div class="section-header">
@@ -56,7 +56,7 @@
               </button>
             </div>
           </div>
-          
+
           <div v-if="estudiantes.length > 0" class="estudiantes-grid">
             <div
               v-for="estudiante in estudiantes"
@@ -65,41 +65,38 @@
               class="estudiante-card"
             >
               <div class="estudiante-avatar">
-                {{ getInitials(estudiante.nombre) }}
+                {{ getInitials(estudiante.fullname) }}
               </div>
-              
+
               <div class="estudiante-info">
-                <h3>{{ estudiante.nombre }}</h3>
+                <h3>{{ estudiante.fullname }}</h3>
                 <p class="estudiante-email">{{ estudiante.email }}</p>
                 <div class="estudiante-stats">
                   <span class="stat-mini">
-                    📚 {{ estudiante.total_historias || 0 }} historias
-                  </span>
-                  <span class="stat-mini">
-                    ⭐ {{ estudiante.puntos_totales || 0 }} puntos
+                    ⭐ {{ estudiante.total_points || 0 }} puntos
                   </span>
                 </div>
-                
+
                 <div class="estudiante-nivel">
-                  <span class="nivel-badge" :class="getNivelClase(estudiante.nivel_actual)">
-                    {{ estudiante.nivel_actual || 'Principiante' }}
+                  <span class="nivel-badge" :class="getNivelClase(estudiante.current_level)">
+                    {{ estudiante.current_level || 'Principiante' }}
                   </span>
                 </div>
               </div>
-              
+
               <div class="estudiante-actions">
                 <span class="btn-ver">Ver Detalle →</span>
               </div>
             </div>
           </div>
-          
+
           <div v-else-if="!loading" class="empty-students">
             <div class="empty-icon">👨‍🎓</div>
             <h3>No hay estudiantes asignados</h3>
             <p>Los estudiantes aparecerán aquí cuando se registren y se asignen a tu clase</p>
           </div>
         </div>
-        
+
         <!-- Ranking de estudiantes -->
         <div class="section">
           <div class="section-header">
@@ -110,7 +107,7 @@
               <option value="actividades">Por Actividades</option>
             </select>
           </div>
-          
+
           <div v-if="rankingEstudiantes.length > 0" class="ranking-list">
             <div
               v-for="(estudiante, index) in rankingEstudiantes"
@@ -122,17 +119,17 @@
                 <span class="position-number">{{ index + 1 }}</span>
                 <span class="position-medal">{{ getRankingMedal(index) }}</span>
               </div>
-              
+
               <div class="ranking-info">
-                <h4>{{ estudiante.nombre }}</h4>
+                <h4>{{ estudiante.fullname }}</h4>
                 <p class="ranking-value">
                   {{ getRankingValue(estudiante) }}
                 </p>
               </div>
-              
+
               <div class="ranking-progress">
                 <div class="progress-bar">
-                  <div 
+                  <div
                     class="progress-fill"
                     :style="{ width: getRankingProgress(estudiante, index) + '%' }"
                   ></div>
@@ -141,14 +138,14 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Actividad reciente -->
         <div class="section">
           <div class="section-header">
             <h2>📈 Actividad Reciente</h2>
             <span class="periodo-actual">Últimos 7 días</span>
           </div>
-          
+
           <div v-if="actividadReciente.length > 0" class="actividad-list">
             <div
               v-for="actividad in actividadReciente"
@@ -158,35 +155,35 @@
               <div class="actividad-icon">
                 {{ getActividadIcon(actividad.tipo) }}
               </div>
-              
+
               <div class="actividad-info">
                 <h4>{{ actividad.estudiante_nombre }}</h4>
                 <p>{{ actividad.descripcion }}</p>
                 <span class="actividad-tiempo">{{ formatTimeAgo(actividad.fecha) }}</span>
               </div>
-              
+
               <div class="actividad-resultado">
                 <span class="puntos-ganados">+{{ actividad.puntos || 0 }} pts</span>
               </div>
             </div>
           </div>
-          
+
           <div v-else class="empty-activity">
             <p>📊 No hay actividad reciente para mostrar</p>
           </div>
         </div>
       </div>
-      
+
       <!-- Loading -->
       <div v-if="loading" class="loading">
         🔄 Cargando información del dashboard...
       </div>
-      
+
       <!-- Error -->
       <div v-if="error" class="error">
         {{ error }}
       </div>
-      
+
     </div>
   </div>
 </template>
@@ -202,7 +199,7 @@ export default {
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    
+
     const estadisticas = ref(null)
     const estudiantes = ref([])
     const rankingEstudiantes = ref([])
@@ -210,19 +207,19 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const tipoRanking = ref('puntos')
-    
+
     const user = computed(() => authStore.user)
     const profile = computed(() => authStore.profile)
-    
+
     const cargarDatos = async () => {
       try {
         loading.value = true
         error.value = null
-        
+
         if (!profile.value?.id) {
           throw new Error('No se encontró el perfil del docente')
         }
-        
+
         // Cargar estadísticas generales
         try {
           const statsResponse = await apiService.obtenerEstadisticasDocente(profile.value.id)
@@ -237,21 +234,23 @@ export default {
             promedio_puntos: 0
           }
         }
-        
+
         // Cargar estudiantes
         try {
+          console.log('this is profile: ', profile.value)
           const estudiantesResponse = await apiService.obtenerEstudiantesDocente(profile.value.id)
-          estudiantes.value = estudiantesResponse.estudiantes || []
-          
+          console.log('this is estudianteResponse: ', estudiantesResponse)
+          estudiantes.value = (estudiantesResponse || []).filter(e => e.matriculado)
+
           // Actualizar estadísticas con datos reales
           estadisticas.value.total_estudiantes = estudiantes.value.length
         } catch (err) {
           console.error('Error cargando estudiantes:', err)
           // Usar datos de demo
-          estudiantes.value = generarEstudiantesDemo()
-          estadisticas.value.total_estudiantes = estudiantes.value.length
+          estudiantes.value = []
+          estadisticas.value.total_estudiantes = 0
         }
-        
+
         // Cargar ranking
         try {
           const rankingResponse = await apiService.obtenerRankingEstudiantes(profile.value.id)
@@ -259,10 +258,10 @@ export default {
         } catch {
           rankingEstudiantes.value = [...estudiantes.value].sort((a, b) => (b.puntos_totales || 0) - (a.puntos_totales || 0))
         }
-        
+
         // Generar actividad reciente (demo)
         actividadReciente.value = generarActividadDemo()
-        
+
       } catch (err) {
         console.error('Error cargando datos del dashboard:', err)
         error.value = 'Error al cargar los datos del dashboard'
@@ -270,39 +269,7 @@ export default {
         loading.value = false
       }
     }
-    
-    const generarEstudiantesDemo = () => {
-      return [
-        {
-          id: 1,
-          nombre: "Ana García",
-          email: "ana.garcia@estudiante.com",
-          total_historias: 5,
-          puntos_totales: 450,
-          nivel_actual: "Explorador",
-          ultima_actividad: new Date().toISOString()
-        },
-        {
-          id: 2,
-          nombre: "Carlos Ruiz",
-          email: "carlos.ruiz@estudiante.com",
-          total_historias: 3,
-          puntos_totales: 320,
-          nivel_actual: "Principiante",
-          ultima_actividad: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: 3,
-          nombre: "María López",
-          email: "maria.lopez@estudiante.com",
-          total_historias: 7,
-          puntos_totales: 680,
-          nivel_actual: "Aventurero",
-          ultima_actividad: new Date(Date.now() - 172800000).toISOString()
-        }
-      ]
-    }
-    
+
     const generarActividadDemo = () => {
       return [
         {
@@ -331,19 +298,19 @@ export default {
         }
       ]
     }
-    
+
     const recargarEstudiantes = () => {
       cargarDatos()
     }
-    
+
     const verDetalleEstudiante = (estudianteId) => {
       router.push(`/estudiante/${estudianteId}`)
     }
-    
+
     const getInitials = (nombre) => {
       return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
     }
-    
+
     const getNivelClase = (nivel) => {
       const clases = {
         'Principiante': 'nivel-principiante',
@@ -353,23 +320,23 @@ export default {
       }
       return clases[nivel] || 'nivel-principiante'
     }
-    
+
     const getRankingClass = (index) => {
       if (index === 0) return 'ranking-first'
       if (index === 1) return 'ranking-second'
       if (index === 2) return 'ranking-third'
       return ''
     }
-    
+
     const getRankingMedal = (index) => {
       const medals = ['🥇', '🥈', '🥉', '🏅', '🎖️']
       return medals[index] || '⭐'
     }
-    
+
     const getRankingValue = (estudiante) => {
       switch (tipoRanking.value) {
         case 'puntos':
-          return `${estudiante.puntos_totales || 0} puntos`
+          return `${estudiante.total_points || 0} puntos`
         case 'historias':
           return `${estudiante.total_historias || 0} historias`
         case 'actividades':
@@ -378,14 +345,14 @@ export default {
           return `${estudiante.puntos_totales || 0} puntos`
       }
     }
-    
+
     const getRankingProgress = (estudiante, index) => {
       if (index === 0) return 100
-      const maxValue = rankingEstudiantes.value[0]?.puntos_totales || 1
-      const currentValue = estudiante.puntos_totales || 0
+      const maxValue = rankingEstudiantes.value[0]?.total_points || 1
+      const currentValue = estudiante.total_points || 0
       return Math.max(10, (currentValue / maxValue) * 100)
     }
-    
+
     const getActividadIcon = (tipo) => {
       const iconos = {
         'historia_completada': '📖',
@@ -395,14 +362,14 @@ export default {
       }
       return iconos[tipo] || '📝'
     }
-    
+
     const formatTimeAgo = (fechaStr) => {
       const fecha = new Date(fechaStr)
       const ahora = new Date()
       const diffMs = ahora - fecha
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
       const diffDays = Math.floor(diffHours / 24)
-      
+
       if (diffDays > 0) {
         return `hace ${diffDays} día${diffDays > 1 ? 's' : ''}`
       } else if (diffHours > 0) {
@@ -411,11 +378,11 @@ export default {
         return 'hace unos minutos'
       }
     }
-    
+
     onMounted(() => {
       cargarDatos()
     })
-    
+
     return {
       user,
       profile,

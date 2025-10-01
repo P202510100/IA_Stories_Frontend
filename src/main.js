@@ -10,14 +10,14 @@ import router from './router/index.js'
 
 console.log('🚀 Iniciando aplicación IaStories...')
 console.log(`📍 Entorno: ${import.meta.env.MODE}`)
-console.log(`🔗 API URL: ${import.meta.env.VITE_API_URL || 'http://localhost:5000'}`)
+console.log(`🔗 API URL: ${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1/'}`)
 
 // ============================================================================
 // 🎯 CONFIGURACIÓN DE VARIABLES DE ENTORNO
 // ============================================================================
 
 // Configurar URL base de la API
-window.API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+window.API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1/'
 
 // Configuraciones globales
 window.APP_CONFIG = {

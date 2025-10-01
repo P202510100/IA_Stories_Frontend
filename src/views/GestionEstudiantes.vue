@@ -20,14 +20,7 @@
             <p>Estudiantes totales</p>
           </div>
         </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <h3>{{ estudiantesActivos.length }}</h3>
-            <p>Activos esta semana</p>
-          </div>
-        </div>
+
         
         <div class="stat-card">
           <div class="stat-icon">📊</div>
@@ -173,33 +166,34 @@
                   </div>
                 </div>
               </div>
-              
+
               <div class="col-estado">
                 <span class="estado-badge" :class="getEstadoClass(estudiante.estado)">
                   {{ getEstadoTexto(estudiante.estado) }}
                 </span>
               </div>
-              
-              <div class="col-historias">
-                <span class="historias-valor">{{ estudiante.total_historias || 0 }}</span>
-              </div>
-              
+
+
               <div class="col-acciones" @click.stop>
                 <div class="acciones-dropdown">
-                  <button 
-                    @click="toggleDropdown(estudiante.id)" 
+                  <button
+                    @click="toggleDropdown(estudiante.id)"
                     class="dropdown-trigger"
                     :class="{ active: dropdownActivo === estudiante.id }"
                   >
                     ⋮
                   </button>
-                  
+
                   <div v-if="dropdownActivo === estudiante.id" class="dropdown-menu">
                     <button @click="verDetalleEstudiante(estudiante.id)" class="dropdown-item">
                       👁️ Ver Detalle
                     </button>
-                    <button @click="enviarMensaje(estudiante)" class="dropdown-item">
-                      💌 Enviar Mensaje
+                    <button
+                        @click="abrirPopupMatricula(estudiante)"
+                        class="dropdown-item"
+                        :disabled="estudiante.matriculado"
+                    >
+                      ✅ {{ estudiante.matriculado ? 'Ya Matriculado' : 'Matricular' }}
                     </button>
                     <button @click="resetearProgreso(estudiante)" class="dropdown-item">
                       🔄 Resetear Progreso
@@ -213,13 +207,14 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Vista de tarjetas -->
         <div v-else-if="vistaActual === 'tarjetas' && estudiantesFiltrados.length > 0" class="estudiantes-grid">
           <div
             v-for="estudiante in estudiantesFiltrados"
             :key="estudiante.id"
             class="estudiante-tarjeta"
+            :class="{ 'matriculado-card': estudiante.matriculado }"
             @click="verDetalleEstudiante(estudiante.id)"
           >
             <div class="tarjeta-header">
@@ -232,38 +227,37 @@
                 </span>
               </div>
             </div>
-            
+
             <div class="tarjeta-info">
               <h3>{{ estudiante.nombre }}</h3>
-              <p class="estudiante-email">{{ estudiante.email }}</p>
-              
-              <div class="tarjeta-stats">
-                <div class="stat-mini">
-                  <span class="stat-valor">{{ estudiante.total_historias || 0 }}</span>
-                  <span class="stat-etiqueta">Historias</span>
-                </div>
-              </div>
+              <p class="estudiante-email">{{ estudiante.id }}</p>
+
+
             </div>
-            
+
             <div class="tarjeta-acciones" @click.stop>
               <button @click="verDetalleEstudiante(estudiante.id)" class="btn-tarjeta primario">
                 👁️ Ver Detalle
               </button>
-              <button @click="enviarMensaje(estudiante)" class="btn-tarjeta secundario">
-                💌 Mensaje
+              <button
+                  @click="abrirPopupMatricula(estudiante)"
+                  class="btn-tarjeta matricular"
+                  :disabled="estudiante.matriculado"
+              >
+                ✅ {{ estudiante.matriculado ? 'Matriculado' : 'Matricular' }}
               </button>
             </div>
           </div>
         </div>
-        
+
         <!-- Estado vacío -->
         <div v-else-if="estudiantesFiltrados.length === 0 && !cargando" class="estado-vacio">
           <div class="vacio-icon">👨‍🎓</div>
           <h3>{{ busquedaTexto ? 'No se encontraron estudiantes' : 'No hay estudiantes registrados' }}</h3>
           <p>
-            {{ busquedaTexto 
-              ? 'Intenta cambiar los filtros de búsqueda' 
-              : 'Invita estudiantes a tu clase para comenzar' 
+            {{ busquedaTexto
+              ? 'Intenta cambiar los filtros de búsqueda'
+              : 'Invita estudiantes a tu clase para comenzar'
             }}
           </p>
           <button v-if="!busquedaTexto" @click="mostrarModalInvitar = true" class="btn btn-primary">
@@ -271,29 +265,29 @@
           </button>
         </div>
       </div>
-      
+
       <!-- Modal Invitar Estudiante -->
       <div v-if="mostrarModalInvitar" class="modal-overlay" @click="mostrarModalInvitar = false">
         <div class="modal-content" @click.stop>
           <h3>➕ Invitar Estudiante</h3>
-          
+
           <div class="invite-tabs">
-            <button 
-              @click="tabInvitacion = 'email'" 
+            <button
+              @click="tabInvitacion = 'email'"
               class="tab-btn"
               :class="{ active: tabInvitacion === 'email' }"
             >
               📧 Por Email
             </button>
-            <button 
-              @click="tabInvitacion = 'codigo'" 
+            <button
+              @click="tabInvitacion = 'codigo'"
               class="tab-btn"
               :class="{ active: tabInvitacion === 'codigo' }"
             >
               🔗 Código de Clase
             </button>
           </div>
-          
+
           <!-- Invitación por email -->
           <div v-if="tabInvitacion === 'email'" class="invite-content">
             <form @submit.prevent="enviarInvitacion">
@@ -307,7 +301,7 @@
                   required
                 />
               </div>
-              
+
               <div class="input-group">
                 <label for="invite-nombre">👤 Nombre del estudiante (opcional)</label>
                 <input
@@ -317,7 +311,7 @@
                   placeholder="Nombre del estudiante"
                 />
               </div>
-              
+
               <div class="input-group">
                 <label for="invite-mensaje">💌 Mensaje personalizado (opcional)</label>
                 <textarea
@@ -327,7 +321,7 @@
                   rows="3"
                 ></textarea>
               </div>
-              
+
               <div class="modal-form-actions">
                 <button type="submit" class="btn btn-primary" :disabled="enviandoInvitacion">
                   <span v-if="enviandoInvitacion">📤 Enviando...</span>
@@ -339,7 +333,7 @@
               </div>
             </form>
           </div>
-          
+
           <!-- Código de clase -->
           <div v-if="tabInvitacion === 'codigo'" class="invite-content">
             <div class="codigo-clase-section">
@@ -352,7 +346,7 @@
                   </button>
                 </div>
               </div>
-              
+
               <div class="codigo-instrucciones">
                 <h4>Instrucciones para estudiantes:</h4>
                 <ol>
@@ -362,7 +356,7 @@
                   <li>¡Listo! Aparecerás en tu lista de estudiantes</li>
                 </ol>
               </div>
-              
+
               <div class="codigo-acciones">
                 <button @click="generarNuevoCodigo" class="btn btn-secondary">
                   🔄 Generar Nuevo Código
@@ -375,13 +369,13 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Modal Confirmación Desvinculación -->
       <div v-if="mostrarModalDesvinculacion" class="modal-overlay" @click="mostrarModalDesvinculacion = false">
         <div class="modal-content" @click.stop>
           <h3>⚠️ Desvincular Estudiante</h3>
           <p>¿Estás seguro de que quieres desvincular a <strong>{{ estudianteADesvincular?.nombre }}</strong>?</p>
-          
+
           <div class="warning-info">
             <h4>Esta acción:</h4>
             <ul>
@@ -391,7 +385,7 @@
               <li>Podrás volver a invitarlo más tarde</li>
             </ul>
           </div>
-          
+
           <div class="modal-form-actions">
             <button @click="desvincularEstudiante" class="btn btn-danger" :disabled="desvinculando">
               <span v-if="desvinculando">🗑️ Desvinculando...</span>
@@ -403,17 +397,28 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Loading -->
       <div v-if="cargando" class="loading">
         🔄 Cargando estudiantes...
       </div>
-      
+
       <!-- Error -->
       <div v-if="error" class="error">
         {{ error }}
       </div>
-      
+
+    </div>
+    <div v-if="mostrarPopupMatricula" class="modal-overlay" @click="mostrarPopupMatricula = false">
+      <div class="modal-content" @click.stop>
+        <h3>Confirmar Matrícula</h3>
+        <p>¿Deseas matricular a <strong>{{ estudianteSeleccionado?.nombre }}</strong> en tu clase?</p>
+
+        <div class="modal-form-actions">
+          <button @click="confirmarMatricula" class="btn btn-primary">✅ Confirmar</button>
+          <button @click="mostrarPopupMatricula = false" class="btn btn-secondary">❌ Cancelar</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -431,7 +436,11 @@ export default {
     const router = useRouter()
     const authStore = useAuthStore()
     const toastStore = useToastStore()
-    
+
+    const mostrarPopupMatricula = ref(false)
+    const estudianteSeleccionado = ref(null)
+
+
     const cargando = ref(true)
     const error = ref('')
     const estudiantes = ref([])
@@ -440,7 +449,7 @@ export default {
     const ordenFiltro = ref('nombre')
     const vistaActual = ref('tarjetas')
     const dropdownActivo = ref(null)
-    
+
     const mostrarModalInvitar = ref(false)
     const mostrarModalDesvinculacion = ref(false)
     const tabInvitacion = ref('email')
@@ -448,21 +457,21 @@ export default {
     const exportando = ref(false)
     const desvinculando = ref(false)
     const estudianteADesvincular = ref(null)
-    
+
     const codigoClase = ref('ABC123')
     const codigoCopiado = ref(false)
-    
+
     const invitacionForm = ref({
       email: '',
       nombre: '',
       mensaje: ''
     })
-    
+
     const user = computed(() => authStore.user)
-    
+
     const estudiantesFiltrados = computed(() => {
       let resultado = [...estudiantes.value]
-      
+
       // Filtrar por texto de búsqueda
       if (busquedaTexto.value) {
         const texto = busquedaTexto.value.toLowerCase()
@@ -471,12 +480,12 @@ export default {
           estudiante.email.toLowerCase().includes(texto)
         )
       }
-      
+
       // Filtrar por estado
       if (filtroEstado.value) {
         resultado = resultado.filter(estudiante => estudiante.estado === filtroEstado.value)
       }
-      
+
       // Ordenar
       resultado.sort((a, b) => {
         switch (ordenFiltro.value) {
@@ -484,34 +493,43 @@ export default {
             return a.nombre.localeCompare(b.nombre)
           case 'puntos':
             return (b.puntos_totales || 0) - (a.puntos_totales || 0)
-          case 'actividad':
-            return new Date(b.ultima_actividad || 0) - new Date(a.ultima_actividad || 0)
           case 'fecha':
             return new Date(b.fecha_registro || 0) - new Date(a.fecha_registro || 0)
           default:
             return 0
         }
       })
-      
+
       return resultado
     })
-    
-    const estudiantesActivos = computed(() => {
-      const unaSemanAtras = new Date()
-      unaSemanAtras.setDate(unaSemanAtras.getDate() - 7)
-      
-      return estudiantes.value.filter(estudiante => {
-        if (!estudiante.ultima_actividad) return false
-        return new Date(estudiante.ultima_actividad) >= unaSemanAtras
-      })
-    })
-    
+
+    const abrirPopupMatricula = (estudiante) => {
+      if (estudiante.matriculado) return
+      estudianteSeleccionado.value = estudiante
+      mostrarPopupMatricula.value = true
+    }
+
+    const confirmarMatricula = async () => {
+      try {
+        await apiService.enrollStudentWithTeacher(
+            user.value.teacher_profile.id,
+            estudianteSeleccionado.value.id
+        )
+        estudianteSeleccionado.value.matriculado = true
+        toastStore.success(`${estudianteSeleccionado.value.nombre} ha sido matriculado 🎉`)
+        mostrarPopupMatricula.value = false
+      } catch (err) {
+        console.error(err)
+        toastStore.error("Error al matricular al estudiante")
+      }
+    }
+
     const promedioClase = computed(() => {
       if (estudiantes.value.length === 0) return 0
       const totalPuntos = estudiantes.value.reduce((sum, e) => sum + (e.puntos_totales || 0), 0)
       return Math.round(totalPuntos / estudiantes.value.length)
     })
-    
+
     const mejorEstudiante = computed(() => {
       if (estudiantes.value.length === 0) return null
       return estudiantes.value.reduce((mejor, actual) => {
@@ -522,10 +540,19 @@ export default {
     const cargarEstudiantes = async () => {
       cargando.value = true
       error.value = ''
-
+      console.log('this is user: ', user.value)
       try {
-        const data = await apiService.obtenerAlumnos()
-        estudiantes.value = data
+        const data = await apiService.obtenerEstudiantesDocente(user.value.teacher_profile.id)
+        console.log("this is response data obtenerAlumnos: ", data)
+        estudiantes.value = data.map(e => ({
+          id: e.id,
+          nombre: e.fullname || 'Sin nombre',
+          email: e.email || 'Sin email',
+          estado: e.activo,
+          puntos_totales: e.total_points,
+          fecha_registro: e.last_updated_date,
+          matriculado: e.matriculado || false
+        }))
       } catch (err) {
         console.error('Error cargando estudiantes:', err)
         error.value = 'Error al cargar la lista de estudiantes'
@@ -533,11 +560,11 @@ export default {
         cargando.value = false
       }
     }
-    
+
     const getInitials = (nombre) => {
       return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
     }
-    
+
     const getEstadoClass = (estado) => {
       const clases = {
         'activo': 'estado-activo',
@@ -546,7 +573,7 @@ export default {
       }
       return clases[estado] || 'estado-activo'
     }
-    
+
     const getEstadoTexto = (estado) => {
       const textos = {
         'activo': 'Activo',
@@ -555,16 +582,16 @@ export default {
       }
       return textos[estado] || 'Activo'
     }
-    
+
     const formatActividad = (fechaStr) => {
       if (!fechaStr) return 'Nunca'
-      
+
       const fecha = new Date(fechaStr)
       const ahora = new Date()
       const diffMs = ahora - fecha
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-      
+
       if (diffDays === 0) {
         if (diffHours === 0) return 'Hace unos minutos'
         return `Hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
@@ -579,28 +606,33 @@ export default {
         })
       }
     }
-    
+
     const toggleDropdown = (estudianteId) => {
       dropdownActivo.value = dropdownActivo.value === estudianteId ? null : estudianteId
     }
-    
+
     const verDetalleEstudiante = (estudianteId) => {
       dropdownActivo.value = null
       router.push(`/estudiante/${estudianteId}`)
     }
-    
-    const enviarMensaje = (estudiante) => {
+
+    const enviarMensaje = async (estudiante) => {
+      console.log('this is student: ', estudiante.id)
+      console.log('this is teacher: ', user.value.teacher_profile.id)
+
+      const response = await apiService.enrollStudentWithTeacher(user.value.teacher_profile.id, estudiante.id)
       dropdownActivo.value = null
       // TODO: Implementar modal de envío de mensaje
+      console.log('respuesta de enrollar: ', response)
       toastStore.info(`Enviando mensaje a ${estudiante.nombre}`)
     }
-    
+
     const resetearProgreso = async (estudiante) => {
       dropdownActivo.value = null
-      
+
       const confirmacion = confirm(`¿Estás seguro de que quieres resetear el progreso de ${estudiante.nombre}?`)
       if (!confirmacion) return
-      
+
       try {
         // TODO: Llamar API real
         await new Promise(resolve => setTimeout(resolve, 1000))
@@ -760,11 +792,14 @@ export default {
       codigoClase,
       codigoCopiado,
       invitacionForm,
-      
+
+      mostrarPopupMatricula,
+      estudianteSeleccionado,
+      abrirPopupMatricula,
+      confirmarMatricula,
       // Computed
       user,
       estudiantesFiltrados,
-      estudiantesActivos,
       promedioClase,
       mejorEstudiante,
       
@@ -798,7 +833,15 @@ export default {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
-
+.matriculado-card {
+  background: #fff3e0; /* naranja claro */
+  border: 2px solid #ff9800;
+}
+.btn-tarjeta.matricular:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
 .gestion-header {
   background: rgba(255,255,255,0.1);
   backdrop-filter: blur(10px);

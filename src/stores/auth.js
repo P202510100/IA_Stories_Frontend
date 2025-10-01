@@ -1,6 +1,6 @@
 // stores/auth.js - CORREGIDO PARA USAR LA KEY CORRECTA
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import {defineStore} from 'pinia'
+import {computed, ref} from 'vue'
 import apiService from '../services/api.js'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -43,6 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
         interests: user.value.student_profile.interests,
         total_points: user.value.student_profile.points,
         current_level: user.value.student_profile.current_level,
+        last_updated_date: user.value.student_profile.last_updated_date
       }
     }
     return null

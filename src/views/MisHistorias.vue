@@ -334,7 +334,7 @@ export default {
         console.log('📊 Cargando historias y estadísticas...')
 
         // Cargar historias
-        await historiasStore.cargarHistoriasAlumno(profile.value.id)
+        await historiasStore.cargarHistoriasAlumno(profile.id)
         
         // Cargar temas disponibles
         await historiasStore.cargarTemas()

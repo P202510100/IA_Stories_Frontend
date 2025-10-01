@@ -167,7 +167,7 @@ const apiService = {
   // 👨‍🎓 ALUMNO - ENDPOINTS 
   // ============================================================================
     async obtenerAlumnos() {
-        const response = await api.get('/api/alumnos') // 👈 asegúrate que tu backend exponga esta ruta
+        const response = await api.get('/students/') // 👈 asegúrate que tu backend exponga esta ruta
         return response.data
     },
 
@@ -194,42 +194,9 @@ const apiService = {
   // 👩‍🏫 DOCENTE - ENDPOINTS EXACTOS 
   // ============================================================================
   
-  async obtenerEstudiantesDocente(docenteId) {
-    // ✅ PROBAR MÚLTIPLES RUTAS POSIBLES
-    try {
-      const response = await api.get(`/api/docentes/${docenteId}/estudiantes`)
+  async obtenerEstudiantesDocente(teacherId) {
+      const response = await api.get(`/enrollments/teacher/${teacherId}/students`)
       return response.data
-    } catch (error) {
-      console.warn('⚠️ Endpoint /estudiantes no disponible, probando alternativa...')
-      // Fallback: Probar endpoint alternativo
-      try {
-        const response = await api.get(`/api/docentes/${docenteId}/students`)
-        return response.data
-      } catch (error2) {
-        console.warn('⚠️ Endpoint /students tampoco disponible, usando datos demo')
-        // Retornar datos demo si no hay endpoints
-        return {
-          estudiantes: [
-            {
-              id: 1,
-              nombre: "Ana García",
-              email: "ana.garcia@estudiante.com",
-              total_historias: 5,
-              puntos_totales: 450,
-              nivel_actual: "Explorador"
-            },
-            {
-              id: 2,
-              nombre: "Carlos Ruiz", 
-              email: "carlos.ruiz@estudiante.com",
-              total_historias: 3,
-              puntos_totales: 320,
-              nivel_actual: "Principiante"
-            }
-          ]
-        }
-      }
-    }
   },
 
   async obtenerAnalyticsDocente(docenteId) {
@@ -323,9 +290,15 @@ const apiService = {
       })
       return response.data
   },
-    async guardarProgreso(progreso) {
-        return api.post('/api/progress/save', progreso)
-    }
+  async guardarProgreso(progreso) {
+     return api.post('/api/progress/save', progreso)
+  },
+  async enrollStudentWithTeacher(teacherId, studentId) {
+      return api.post(`/enrollments/`,{
+          teacher_id: teacherId,
+          student_id: studentId
+      })
+  }
 }
 
 
