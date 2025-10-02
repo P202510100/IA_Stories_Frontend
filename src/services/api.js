@@ -1,12 +1,14 @@
 
 import axios from 'axios'
 
+const API_URL = 'http://localhost:5000'
+
 const api = axios.create({
   baseURL: 'http://localhost:8000/api/v1',
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 45000, // Aumentado para generación IA
+  timeout: 10000, // Aumentado para generación IA
 })
 
 // Interceptor para manejar errores
@@ -20,7 +22,7 @@ api.interceptors.response.use(
 
 const apiService = {
   // ============================================================================
-  // 🔐 AUTENTICACIÓN - ENDPOINTS 
+  //  AUTENTICACIÓN - ENDPOINTS 
   // ============================================================================
   
   async login(credentials) {
@@ -47,6 +49,41 @@ const apiService = {
     return response.data
   },
 
+ async resetPassword(token, newPassword) {
+    try {
+      console.log('📡 API: Restableciendo contraseña...')
+      
+      const response = await api.post('/auth/reset-password', {
+        token: token,
+        new_password: newPassword
+      })
+      
+      console.log('✅ API: Contraseña restablecida')
+      return response.data
+      
+    } catch (error) {
+      console.error('❌ API: Error restableciendo contraseña:', error.response?.data || error.message)
+      throw error
+    }
+  },
+
+  async validateResetToken(token) {
+    try {
+      console.log('📡 API: Validando token de reset...')
+      
+      const response = await api.post('/auth/validate-reset-token', {
+        token: token
+      })
+      
+      console.log('✅ API: Token válido')
+      return response.data
+      
+    } catch (error) {
+      console.error('❌ API: Token inválido:', error.response?.data || error.message)
+      throw error
+    }
+  },
+
   async updateUser(userId, userData) {
       console.log(userId, userData)
     const response = await api.put('/auth/update-profile', {
@@ -64,7 +101,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 📚 HISTORIAS - ENDPOINTS 
+  //  HISTORIAS - ENDPOINTS 
   // ============================================================================
   
   async obtenerTemas() {
@@ -102,14 +139,14 @@ const apiService = {
   },
 
   // ============================================================================
-  // ❓ PREGUNTAS - ENDPOINTS EXACTOS
+  //  PREGUNTAS - ENDPOINTS EXACTOS
   // ============================================================================
   
   async responderPregunta(datosRespuesta) {
     console.log('🎯 DEBUGGING ENDPOINT responderPregunta')
     console.log('📨 Datos recibidos:', datosRespuesta)
     
-    // ✅ FORMATO 1: Como dice la documentación
+    //  FORMATO 1: Como dice la documentación
     const formato1 = {
       historia_id: datosRespuesta.historia_id,
       alumno_id: datosRespuesta.alumno_id,
@@ -117,7 +154,7 @@ const apiService = {
       respuesta: datosRespuesta.respuesta
     }
     
-    // ✅ FORMATO 2: Con "respuestas" plural (según error del backend)
+    //  FORMATO 2: Con "respuestas" plural (según error del backend)
     const formato2 = {
       historia_id: datosRespuesta.historia_id,
       alumno_id: datosRespuesta.alumno_id,
@@ -125,7 +162,7 @@ const apiService = {
       respuestas: [datosRespuesta.respuesta]
     }
     
-    // ✅ FORMATO 3: IDs como strings
+    //  FORMATO 3: IDs como strings
     const formato3 = {
       historia_id: String(datosRespuesta.historia_id),
       alumno_id: String(datosRespuesta.alumno_id),
@@ -133,30 +170,30 @@ const apiService = {
       respuesta: datosRespuesta.respuesta
     }
     
-    console.log('🧪 Probando Formato 1 (documentación):', formato1)
+    console.log('Probando Formato 1 (documentación):', formato1)
     try {
       const response = await api.post('/api/preguntas/responder', formato1)
-      console.log('✅ Formato 1 funcionó!')
+      console.log(' Formato 1 funcionó!')
       return response.data
     } catch (error1) {
-      console.log('❌ Formato 1 falló:', error1.response?.data?.error)
+      console.log(' Formato 1 falló:', error1.response?.data?.error)
       
-      console.log('🧪 Probando Formato 2 (respuestas plural):', formato2)
+      console.log(' Probando Formato 2 (respuestas plural):', formato2)
       try {
         const response = await api.post('/api/preguntas/responder', formato2)
-        console.log('✅ Formato 2 funcionó!')
+        console.log(' Formato 2 funcionó!')
         return response.data
       } catch (error2) {
-        console.log('❌ Formato 2 falló:', error2.response?.data?.error)
+        console.log(' Formato 2 falló:', error2.response?.data?.error)
         
-        console.log('🧪 Probando Formato 3 (IDs como strings):', formato3)
+        console.log(' Probando Formato 3 (IDs como strings):', formato3)
         try {
           const response = await api.post('/api/preguntas/responder', formato3)
           console.log('✅ Formato 3 funcionó!')
           return response.data
         } catch (error3) {
-          console.log('❌ Formato 3 falló:', error3.response?.data?.error)
-          console.error('💥 TODOS LOS FORMATOS FALLARON')
+          console.log(' Formato 3 falló:', error3.response?.data?.error)
+          console.error(' TODOS LOS FORMATOS FALLARON')
           throw error1 // Lanzar el primer error
         }
       }
@@ -164,7 +201,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 👨‍🎓 ALUMNO - ENDPOINTS 
+  //  ALUMNO - ENDPOINTS 
   // ============================================================================
     async obtenerAlumnos() {
         const response = await api.get('/students/') // 👈 asegúrate que tu backend exponga esta ruta
@@ -191,7 +228,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 👩‍🏫 DOCENTE - ENDPOINTS EXACTOS 
+  //  DOCENTE - ENDPOINTS EXACTOS 
   // ============================================================================
   
   async obtenerEstudiantesDocente(teacherId) {
@@ -222,7 +259,7 @@ const apiService = {
     }
   },
 
-  // ✅ ALIAS para compatibilidad con DashboardDocente.vue
+  //  ALIAS para compatibilidad con DashboardDocente.vue
   async obtenerEstadisticasDocente(docenteId) {
     return this.obtenerAnalyticsDocente(docenteId)
   },
@@ -231,6 +268,21 @@ const apiService = {
     return this.obtenerRankingClase(docenteId)
   },
 
+  async obtenerTodosLosEstudiantes() {
+  try {
+    const response = await api.get('/api/alumnos/todos')
+    return response.data
+  } catch (error) {
+    try {
+      const response = await api.get('/api/alumnos')
+      return response.data
+    } catch (error2) {
+      console.error('❌ No se pudo obtener estudiantes:', error2)
+      throw new Error('No se pudo cargar la lista de estudiantes')
+    }
+  }
+},
+  
   async asociarEstudiante(docenteId, alumnoId) {
     const response = await api.post(`/api/docentes/${docenteId}/associate`, {
       alumno_id: alumnoId
@@ -268,7 +320,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 🏆 RANKING - 
+  //  RANKING - 
   // ============================================================================
   
   async obtenerRankingClase(docenteId) {
@@ -277,7 +329,7 @@ const apiService = {
   },
 
   // ============================================================================
-  // 🏥 HEALTH CHECK - 
+  //  HEALTH CHECK - 
   // ============================================================================
   
   async healthCheck() {

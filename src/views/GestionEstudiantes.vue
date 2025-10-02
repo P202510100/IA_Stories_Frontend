@@ -42,12 +42,12 @@
       <!-- Acciones principales -->
       <div class="acciones-principales">
         <div class="acciones-grid">
-          <button @click="mostrarModalInvitar = true" class="accion-btn invitar">
-            <div class="accion-icon">➕</div>
-            <div class="accion-content">
-              <h3>Invitar Estudiante</h3>
-              <p>Agrega un nuevo estudiante a tu clase</p>
-            </div>
+          <button @click="abrirModalInvitar" class="accion-btn invitar">
+          <div class="accion-icon">👥</div>
+          <div class="accion-content">
+            <h3>Gestionar Estudiantes</h3>
+            <p>Asigna estudiantes o comparte código de clase</p>
+          </div>
           </button>
           
           <button @click="generarCodigo" class="accion-btn codigo">
@@ -150,7 +150,7 @@
           
           <div class="tabla-body">
             <div
-              v-for="estudiante in estudiantesFiltrados"
+              v-for="estudiante in estudiantesFiltradosModal"
               :key="estudiante.id"
               class="tabla-fila"
               @click="verDetalleEstudiante(estudiante.id)"
@@ -211,7 +211,7 @@
         <!-- Vista de tarjetas -->
         <div v-else-if="vistaActual === 'tarjetas' && estudiantesFiltrados.length > 0" class="estudiantes-grid">
           <div
-            v-for="estudiante in estudiantesFiltrados"
+            v-for="estudiante in estudiantesFiltradosModal"
             :key="estudiante.id"
             class="estudiante-tarjeta"
             :class="{ 'matriculado-card': estudiante.matriculado }"
@@ -365,6 +365,28 @@
                   📱 Compartir Código
                 </button>
               </div>
+            </div>
+
+            <div class="estudiante-actions">
+              <button
+                v-if="!estudiante.esta_asignado"
+                @click="asignarEstudiante(estudiante)"
+                class="btn-asignar"
+                :disabled="asignandoEstudiante === estudiante.id"
+              >
+                <span v-if="asignandoEstudiante === estudiante.id">⏳</span>
+                <span v-else>➕ Asignar</span>
+              </button>
+
+              <button
+                v-else
+                @click="desasignarEstudiante(estudiante)"
+                class="btn-desasignar"
+                :disabled="desasignandoEstudiante === estudiante.id"
+              >
+                <span v-if="desasignandoEstudiante === estudiante.id">⏳</span>
+                <span v-else>➖ Quitar</span>
+              </button>
             </div>
           </div>
         </div>
@@ -756,6 +778,106 @@ export default {
       router.push('/dashboard-docente')
     }
     
+
+
+  const cargarTodosLosEstudiantes = async () => {
+  try {
+    cargandoTodosEstudiantes.value = true
+    console.log('📋 Cargando todos los estudiantes registrados...')
+    
+    if (!authStore.user?.id || !authStore.profile?.id) {
+      throw new Error('No se encontró el perfil del docente')
+    }
+    
+    // Obtener todos los estudiantes
+    const response = await apiService.obtenerTodosLosEstudiantes()
+    console.log('✅ Estudiantes obtenidos:', response)
+    
+    // Obtener estudiantes ya asignados al docente
+    const estudiantesAsignadosResponse = await apiService.obtenerEstudiantesDocente(authStore.profile.id)
+    console.log('📊 Estudiantes asignados:', estudiantesAsignadosResponse)
+    
+    const idsAsignados = new Set(
+      estudiantesAsignadosResponse.estudiantes?.map(e => e.user_id || e.alumno_id || e.id) || []
+    )
+    
+    // Marcar cuáles están asignados
+    todosLosEstudiantes.value = (response.alumnos || []).map(estudiante => ({
+      ...estudiante,
+      esta_asignado: idsAsignados.has(estudiante.user_id || estudiante.id)
+    }))
+    
+    console.log(`✅ ${todosLosEstudiantes.value.length} estudiantes cargados`)
+    console.log('📋 Estudiantes disponibles:', todosLosEstudiantes.value.filter(e => !e.esta_asignado).length)
+    console.log('✅ Estudiantes asignados:', todosLosEstudiantes.value.filter(e => e.esta_asignado).length)
+    
+  } catch (error) {
+    console.error('❌ Error cargando estudiantes:', error)
+    toastStore.error('Error al cargar la lista de estudiantes: ' + error.message)
+  } finally {
+    cargandoTodosEstudiantes.value = false
+  }
+}
+
+const asignarEstudiante = async (estudiante) => {
+  try {
+    asignandoEstudiante.value = estudiante.id
+    console.log(`➕ Asignando estudiante ${estudiante.nombre} a la clase...`)
+    
+    await apiService.asociarEstudiante(authStore.profile.id, estudiante.user_id || estudiante.id)
+    
+    const index = todosLosEstudiantes.value.findIndex(e => e.id === estudiante.id)
+    if (index !== -1) {
+      todosLosEstudiantes.value[index].esta_asignado = true
+    }
+    
+    await cargarEstudiantes()
+    
+    toastStore.success(`✅ ${estudiante.nombre} fue asignado a tu clase`)
+    
+  } catch (error) {
+    console.error('❌ Error asignando estudiante:', error)
+    toastStore.error(`Error al asignar a ${estudiante.nombre}`)
+  } finally {
+    asignandoEstudiante.value = null
+  }
+}
+
+const desasignarEstudiante = async (estudiante) => {
+  try {
+    desasignandoEstudiante.value = estudiante.id
+    console.log(`➖ Quitando estudiante ${estudiante.nombre} de la clase...`)
+    
+    await apiService.desvincularEstudiante(authStore.profile.id, estudiante.user_id || estudiante.id)
+    
+    const index = todosLosEstudiantes.value.findIndex(e => e.id === estudiante.id)
+    if (index !== -1) {
+      todosLosEstudiantes.value[index].esta_asignado = false
+    }
+    
+    await cargarEstudiantes()
+    
+    toastStore.success(`➖ ${estudiante.nombre} fue quitado de tu clase`)
+    
+  } catch (error) {
+    console.error('❌ Error desasignando estudiante:', error)
+    toastStore.error(`Error al quitar a ${estudiante.nombre}`)
+  } finally {
+    desasignandoEstudiante.value = null
+  }
+}
+
+const refrescarEstudiantes = () => {
+  cargarTodosLosEstudiantes()
+}
+
+// MODIFICAR el método que abre el modal
+const abrirModalInvitar = () => {
+  mostrarModalInvitar.value = true
+  tabInvitacion.value = 'asignar' //  Abrir directamente en asignar
+  cargarTodosLosEstudiantes() //  Cargar estudiantes
+}
+
     // Cerrar dropdown al hacer click fuera
     const handleClickOutside = (event) => {
       if (!event.target.closest('.acciones-dropdown')) {
@@ -821,7 +943,12 @@ export default {
       compartirCodigo,
       exportarDatos,
       enviarMensajeGrupal,
-      volverAtras
+      volverAtras,
+      cargarTodosLosEstudiantes,
+      asignarEstudiante,
+      desasignarEstudiante,
+      refrescarEstudiantes,
+      abrirModalInvitar
     }
   }
 }

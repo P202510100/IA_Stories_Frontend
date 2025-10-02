@@ -275,7 +275,7 @@ export default {
       error.value = ''
       
       try {
-        // TODO: Llamar API real
+        // TODO: Llamar API 
         await new Promise(resolve => setTimeout(resolve, 1500))
         
         // Datos de ejemplo
@@ -291,105 +291,104 @@ export default {
       }
     }
     
-    const generarDatosRanking = () => {
-      // Datos de ejemplo para desarrollo
-      const estudiantes = [
-        {
-          id: 1,
-          nombre: 'Ana García', // Usuario actual
-          puntos: 1250,
-          historias: 8,
-          actividades: 15,
-          precision: 87,
-          racha: 5,
-          tendencia: 'up',
-          cambio: 2
-        },
-        {
-          id: 2,
-          nombre: 'Carlos Rodríguez',
-          puntos: 1480,
-          historias: 12,
-          actividades: 20,
-          precision: 92,
-          racha: 8,
-          tendencia: 'up',
-          cambio: 1
-        },
-        {
-          id: 3,
-          nombre: 'María López',
-          puntos: 1350,
-          historias: 10,
-          actividades: 18,
-          precision: 89,
-          racha: 6,
-          tendencia: 'down',
-          cambio: -1
-        },
-        {
-          id: 4,
-          nombre: 'Diego Martín',
-          puntos: 1180,
-          historias: 7,
-          actividades: 14,
-          precision: 84,
-          racha: 3,
-          tendencia: 'up',
-          cambio: 3
-        },
-        {
-          id: 5,
-          nombre: 'Sofia Chen',
-          puntos: 1620,
-          historias: 15,
-          actividades: 25,
-          precision: 95,
-          racha: 12,
-          tendencia: 'stable',
-          cambio: 0
-        },
-        {
-          id: 6,
-          nombre: 'Andrés Torres',
-          puntos: 980,
-          historias: 6,
-          actividades: 11,
-          precision: 78,
-          racha: 2,
-          tendencia: 'down',
-          cambio: -2
-        }
-      ]
-      
-      // Ordenar según criterio seleccionado
-      const criterio = criterioSeleccionado.value
-      estudiantes.sort((a, b) => {
-        switch (criterio) {
-          case 'puntos':
-            return b.puntos - a.puntos
-          case 'historias':
-            return b.historias - a.historias
-          case 'actividades':
-            return b.actividades - a.actividades
-          case 'precision':
-            return b.precision - a.precision
-          case 'racha':
-            return b.racha - a.racha
-          default:
-            return b.puntos - a.puntos
-        }
-      })
-      
-      const estadisticas = {
-        promedioClase: Math.round(estudiantes.reduce((sum, e) => sum + e.precision, 0) / estudiantes.length),
-        historiasTotal: estudiantes.reduce((sum, e) => sum + e.historias, 0),
-        puntosTotal: estudiantes.reduce((sum, e) => sum + e.puntos, 0),
-        rachaMaxima: Math.max(...estudiantes.map(e => e.racha))
-      }
-      
-      return { ranking: estudiantes, estadisticas }
+const generarDatosRanking = async () => {
+  try {
+    console.log('🏆 Cargando ranking real de estudiantes...')
+    
+    if (!authStore.user?.id || !authStore.profile?.id) {
+      throw new Error('No se encontró el perfil del usuario')
     }
+    
+    // ✅ USAR API para obtener ranking
+    const docenteId = authStore.profile.id
+    const response = await apiService.obtenerRankingEstudiantes(docenteId)
+    
+    // Procesar estudiantes reales
+    const estudiantesReales = (response.ranking || response.estudiantes || []).map((estudiante, index) => ({
+      id: estudiante.id || estudiante.user_id || estudiante.alumno_id,
+      nombre: estudiante.nombre,
+      puntos: estudiante.puntos_totales || 0,
+      historias: estudiante.total_historias || 0,
+      actividades: estudiante.total_actividades || 0,
+      precision: estudiante.precision || calcularPrecisionRanking(estudiante),
+      racha: estudiante.racha || Math.floor(Math.random() * 10) + 1, // Temporal hasta tener dato real
+      tendencia: determinarTendencia(index),
+      cambio: Math.floor(Math.random() * 5) - 2 // Temporal hasta tener dato real
+    }))
+    
+    // Ordenar según criterio seleccionado
+    const criterio = criterioSeleccionado.value
+    estudiantesReales.sort((a, b) => {
+      switch (criterio) {
+        case 'puntos':
+          return b.puntos - a.puntos
+        case 'historias':
+          return b.historias - a.historias
+        case 'actividades':
+          return b.actividades - a.actividades
+        case 'precision':
+          return b.precision - a.precision
+        default:
+          return b.puntos - a.puntos
+      }
+    })
+    
+    // Calcular estadísticas reales
+    const estadisticasReales = {
+      total_participantes: estudiantesReales.length,
+      promedio_puntos: estudiantesReales.length > 0 
+        ? Math.round(estudiantesReales.reduce((sum, est) => sum + est.puntos, 0) / estudiantesReales.length)
+        : 0,
+      mejor_estudiante: estudiantesReales.length > 0 ? estudiantesReales[0] : null,
+      total_historias: estudiantesReales.reduce((sum, est) => sum + est.historias, 0),
+      promedio_precision: estudiantesReales.length > 0
+        ? Math.round(estudiantesReales.reduce((sum, est) => sum + est.precision, 0) / estudiantesReales.length)
+        : 0
+    }
+    
+    console.log(`✅ Ranking real cargado: ${estudiantesReales.length} estudiantes`)
+    
+    return {
+      ranking: estudiantesReales,
+      estadisticas: estadisticasReales
+    }
+    
+  } catch (err) {
+    console.error('❌ Error cargando ranking real:', err)
+    
+    //  NO retornar datos demo, retornar estructura vacía
+    return {
+      ranking: [],
+      estadisticas: {
+        total_participantes: 0,
+        promedio_puntos: 0,
+        mejor_estudiante: null,
+        total_historias: 0,
+        promedio_precision: 0
+      }
+    }
+  }
+}
+
+//  AGREGAR funciones auxiliares
+const calcularPrecisionRanking = (estudiante) => {
+  if (estudiante.respuestas_correctas && estudiante.total_respuestas) {
+    return Math.round((estudiante.respuestas_correctas / estudiante.total_respuestas) * 100)
+  }
+  
+  // Estimación temporal
+  const puntos = estudiante.puntos_totales || 0
+  const historias = estudiante.total_historias || 1
+  
+  return Math.min(100, Math.max(50, Math.round((puntos / (historias * 100)) * 100)))
+}
+
+const determinarTendencia = (index) => {
+  // Temporal hasta tener datos reales de tendencia
+  const tendencias = ['up', 'down', 'stable']
+  return tendencias[index % 3]
+}
+
     
     const getInitials = (nombre) => {
       return nombre.split(' ').map(n => n[0]).join('').toUpperCase()

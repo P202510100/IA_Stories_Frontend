@@ -1,19 +1,30 @@
-// router/index.js - INTEGRADO 100% CON EL BACKEND
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 // ============================================================================
-// 📍 DEFINICIÓN DE RUTAS
+// 📦 DEFINICIÓN DE RUTAS
 // ============================================================================
+import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
+import ResetPasswordView from '@/views/ResetPasswordView.vue'
 
 const routes = [
   // ============================================================================
-  // 🏠 RUTAS PÚBLICAS (NO AUTENTICADAS)
+  // 🏠 RUTA RAÍZ
   // ============================================================================
   {
     path: '/',
     name: 'Home',
     redirect: (to) => {
-      // Verificar si hay usuario autenticado en localStorage
+      console.log('🏠 Router: Verificando redirección desde:', to.fullPath)
+      
+      const urlParams = new URLSearchParams(to.fullPath.split('?')[1] || '')
+      const forceLogin = urlParams.get('force') === 'true'
+      
+      if (forceLogin) {
+        console.log('🔒 Router: force=true detectado, redirigiendo a login')
+        return '/login?force=true'
+      }
+      
       const user = localStorage.getItem('user')
       if (user) {
         try {
@@ -24,13 +35,19 @@ const routes = [
             return '/dashboard-docente'
           }
         } catch (e) {
-          console.error('Error parsing user data:', e)
+          console.error('❌ Router: Error parsing user data:', e)
+          localStorage.removeItem('user')
         }
       }
+      
+      console.log('🔓 Router: No hay usuario autenticado, redirigiendo a login')
       return '/login'
     }
   },
   
+  // ============================================================================
+  // 🌐 RUTAS PÚBLICAS
+  // ============================================================================
   {
     path: '/login',
     name: 'Login', 
@@ -51,18 +68,35 @@ const routes = [
     }
   },
   
+  // ============================================================================
+  // 🔐 RUTAS DE RECUPERACIÓN DE CONTRASEÑA
+  // ============================================================================
   {
     path: '/forgot-password',
     name: 'ForgotPassword',
-    component: () => import('../views/ForgotPasswordView.vue'),
+    component: ForgotPasswordView,
     meta: { 
-      requiresGuest: true,
+      requiresAuth: false,
+      requiresGuest: false,  
+      isRecoveryRoute: true,  
       title: 'Recuperar Contraseña - IaStories'
     }
   },
-  
+
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: ResetPasswordView,
+    meta: { 
+      requiresAuth: false,
+      requiresGuest: false,  // 👈 Permite acceso siempre
+      isRecoveryRoute: true,  // 👈 Marca especial
+      title: 'Restablecer Contraseña - IaStories'
+    }
+  },
+
   // ============================================================================
-  // 🎓 RUTAS DE ALUMNO (REQUIEREN AUTENTICACIÓN + TIPO ALUMNO)
+  //  RUTAS DE ALUMNO (REQUIEREN AUTENTICACIÓN + TIPO ALUMNO)
   // ============================================================================
   {
     path: '/dashboard-alumno',
@@ -123,7 +157,7 @@ const routes = [
   },
   
   // ============================================================================
-  // 👨‍🏫 RUTAS DE DOCENTE (REQUIEREN AUTENTICACIÓN + TIPO DOCENTE)
+  //  RUTAS DE DOCENTE (REQUIEREN AUTENTICACIÓN + TIPO DOCENTE)
   // ============================================================================
   {
     path: '/dashboard-docente', 
@@ -162,7 +196,7 @@ const routes = [
   },
   
   // ============================================================================
-  // 👤 RUTAS COMPARTIDAS (REQUIEREN AUTENTICACIÓN)
+  //  RUTAS COMPARTIDAS (REQUIEREN AUTENTICACIÓN)
   // ============================================================================
   {
     path: '/perfil',
@@ -175,7 +209,7 @@ const routes = [
   },
   
   // ============================================================================
-  // ❌ RUTA 404 (CATCH ALL)
+  //  RUTA 404 (CATCH ALL)
   // ============================================================================
   {
     path: '/:pathMatch(.*)*',
@@ -188,14 +222,13 @@ const routes = [
 ]
 
 // ============================================================================
-// 🚀 CONFIGURACIÓN DEL ROUTER
+//  CONFIGURACIÓN DEL ROUTER
 // ============================================================================
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   scrollBehavior(to, from, savedPosition) {
-    // Restaurar posición guardada o ir al top
     if (savedPosition) {
       return savedPosition
     } else if (to.hash) {
@@ -207,7 +240,7 @@ const router = createRouter({
 })
 
 // ============================================================================
-// 🛡️ GUARDS DE NAVEGACIÓN (INTEGRADOS CON EL BACKEND)
+//  GUARDS DE NAVEGACIÓN
 // ============================================================================
 router.beforeEach(async (to, from, next) => {
     console.log(`🚀 Navegando a: ${to.path}`)
@@ -328,11 +361,10 @@ router.beforeEach(async (to, from, next) => {
 })
 
 // ============================================================================
-// 🔄 HOOK DESPUÉS DE CADA NAVEGACIÓN
+//  HOOK DESPUÉS DE CADA NAVEGACIÓN
 // ============================================================================
 
 router.afterEach((to, from) => {
-  // Log de navegación exitosa
   console.log(`✅ Navegación completada: ${from.path} → ${to.path}`)
   
   // Cerrar menús móviles si están abiertos
@@ -345,13 +377,13 @@ router.afterEach((to, from) => {
 })
 
 // ============================================================================
-// ⚠️ MANEJO DE ERRORES DE NAVEGACIÓN
+//  MANEJO DE ERRORES DE NAVEGACIÓN
 // ============================================================================
 
 router.onError((error, to, from) => {
-  console.error('❌ Error de navegación:', error)
+  console.error('🚨 Error de navegación:', error)
   
-  // Errores comunes de chunk loading (código dividido)
+  // Errores comunes de chunk loading
   if (error.message.includes('Loading chunk') || 
       error.message.includes('Loading CSS chunk') ||
       error.message.includes('Failed to fetch dynamically imported module')) {

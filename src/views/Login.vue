@@ -9,7 +9,7 @@
 
       <!-- Mostrar errores del backend -->
       <div v-if="authStore.error" class="error-message">
-        ❌ {{ authStore.error }}
+         {{ authStore.error }}
       </div>
 
       <!-- Formulario de login -->
@@ -177,9 +177,31 @@ export default {
 
     // Lifecycle hooks
     onMounted(() => {
-      console.log('🔄 Componente Login montado')
-      checkBackendConnection()
-      checkExistingSession()
+       console.log('🔄 Componente Login montado')
+  checkBackendConnection()
+
+  //  VERIFICAR PARÁMETROS DE URL ANTES DE VERIFICAR SESIÓN
+  const urlParams = new URLSearchParams(window.location.search)
+  const forceLogin = urlParams.get('force') === 'true'
+  
+  console.log('🔍 Login: URL actual:', window.location.href)
+  console.log('🔍 Login: force parámetro:', forceLogin)
+  
+  if (forceLogin) {
+    console.log('🔒 Login: force=true detectado, limpiando sesión y mostrando formulario')
+    
+    // Limpiar cualquier sesión existente
+    authStore.logout()
+    
+    // Limpiar parámetros de URL para evitar loops infinitos
+    const newUrl = window.location.pathname
+    window.history.replaceState({}, document.title, newUrl)
+    console.log('🧹 Login: URL limpiada a:', newUrl)
+    
+  } else {
+    console.log('🔍 Login: No hay force=true, verificando sesión existente...')
+    checkExistingSession()
+  }
     })
 
     return {

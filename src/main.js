@@ -133,28 +133,37 @@ app.use({
   install(app) {
     // Método global para verificar conectividad con el backend
     app.config.globalProperties.$checkBackendHealth = async () => {
-      try {
-        const response = await fetch(`${window.API_BASE_URL}/health`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 5000
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          console.log('✅ Backend health check exitoso:', data)
-          return { healthy: true, data }
-        } else {
-          console.warn('⚠️ Backend respondió con error:', response.status)
-          return { healthy: false, status: response.status }
-        }
-      } catch (error) {
-        console.error('❌ Backend no responde:', error)
-        return { healthy: false, error: error.message }
-      }
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    
+    const response = await fetch(`${window.API_BASE_URL}/health`, {  // ← Ya está bien, sin /api/
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    })
+    
+    clearTimeout(timeoutId)
+    
+    if (response.ok) {
+      const data = await response.json()
+      console.log('✅ Backend health check exitoso:', data)
+      return { healthy: true, data }
+    } else {
+      console.warn('⚠️ Backend respondió con error:', response.status)
+      return { healthy: false, status: response.status }
     }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error('❌ Backend timeout')
+      return { healthy: false, error: 'timeout' }
+    }
+    console.error('❌ Backend no responde:', error)
+    return { healthy: false, error: error.message }
+  }
+}
     
     // Método global para formatear fechas según el contexto educativo
     app.config.globalProperties.$formatEducationDate = (date) => {

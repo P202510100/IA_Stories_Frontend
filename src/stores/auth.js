@@ -184,6 +184,40 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function resetPassword(token, newPassword) {
+    loading.value = true
+    error.value = null
+
+    try {
+      console.log('🔐 Restableciendo contraseña con token...')
+      
+      const response = await apiService.resetPassword(token, newPassword)
+      
+      console.log('✅ Contraseña restablecida exitosamente')
+      return response
+      
+    } catch (err) {
+      console.error('❌ Error restableciendo contraseña:', err)
+      error.value = err.response?.data?.error || 'Error al restablecer la contraseña'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+
+async function validateResetToken(token) {
+    try {
+      console.log('🔍 Validando token de reset...')
+      const response = await apiService.validateResetToken(token)
+      console.log('✅ Token válido')
+      return response
+    } catch (err) {
+      console.error('❌ Token inválido:', err)
+      throw err
+    }
+  }
+
   // ✅ UPDATE PROFILE
   async function updateProfile(userData) {
     loading.value = true
@@ -328,6 +362,8 @@ export const useAuthStore = defineStore('auth', () => {
     forgotPassword,
     updateProfile,
     deleteAccount,
+    resetPassword,        
+    validateResetToken,
     
     // Métodos de sesión (que tu Login.vue espera)
     initAuth,
