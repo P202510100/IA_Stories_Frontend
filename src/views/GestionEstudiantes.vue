@@ -39,43 +39,6 @@
         </div>
       </div>
       
-      <!-- Acciones principales -->
-      <div class="acciones-principales">
-        <div class="acciones-grid">
-          <button @click="abrirModalInvitar" class="accion-btn invitar">
-          <div class="accion-icon">👥</div>
-          <div class="accion-content">
-            <h3>Gestionar Estudiantes</h3>
-            <p>Asigna estudiantes o comparte código de clase</p>
-          </div>
-          </button>
-          
-          <button @click="generarCodigo" class="accion-btn codigo">
-            <div class="accion-icon">🔗</div>
-            <div class="accion-content">
-              <h3>Código de Clase</h3>
-              <p>Genera un código para que se unan</p>
-            </div>
-          </button>
-          
-          <button @click="exportarDatos" class="accion-btn exportar" :disabled="exportando">
-            <div class="accion-icon">📊</div>
-            <div class="accion-content">
-              <h3>{{ exportando ? 'Exportando...' : 'Exportar Datos' }}</h3>
-              <p>Descarga un reporte en PDF</p>
-            </div>
-          </button>
-          
-          <button @click="enviarMensajeGrupal" class="accion-btn mensaje">
-            <div class="accion-icon">💌</div>
-            <div class="accion-content">
-              <h3>Mensaje Grupal</h3>
-              <p>Envía un mensaje a todos</p>
-            </div>
-          </button>
-        </div>
-      </div>
-      
       <!-- Filtros y búsqueda -->
       <div class="filtros-section">
         <div class="filtros-card">
@@ -150,7 +113,7 @@
           
           <div class="tabla-body">
             <div
-              v-for="estudiante in estudiantesFiltradosModal"
+              v-for="estudiante in estudiantesFiltrados"
               :key="estudiante.id"
               class="tabla-fila"
               @click="verDetalleEstudiante(estudiante.id)"
@@ -211,7 +174,7 @@
         <!-- Vista de tarjetas -->
         <div v-else-if="vistaActual === 'tarjetas' && estudiantesFiltrados.length > 0" class="estudiantes-grid">
           <div
-            v-for="estudiante in estudiantesFiltradosModal"
+            v-for="estudiante in estudiantesFiltrados"
             :key="estudiante.id"
             class="estudiante-tarjeta"
             :class="{ 'matriculado-card': estudiante.matriculado }"
@@ -715,18 +678,13 @@ export default {
         enviandoInvitacion.value = false
       }
     }
-    
-    const generarCodigo = () => {
-      tabInvitacion.value = 'codigo'
-      mostrarModalInvitar.value = true
-    }
-    
+
     const copiarCodigo = async () => {
       try {
         await navigator.clipboard.writeText(codigoClase.value)
         codigoCopiado.value = true
         toastStore.success('Código copiado al portapapeles')
-        
+
         setTimeout(() => {
           codigoCopiado.value = false
         }, 2000)
@@ -753,27 +711,7 @@ export default {
       }
     }
     
-    const exportarDatos = async () => {
-      exportando.value = true
-      
-      try {
-        // TODO: Implementar exportación real a PDF
-        await new Promise(resolve => setTimeout(resolve, 3000))
-        
-        toastStore.success('Reporte PDF generado y descargado')
-        
-      } catch (err) {
-        toastStore.error('Error al generar el reporte')
-      } finally {
-        exportando.value = false
-      }
-    }
-    
-    const enviarMensajeGrupal = () => {
-      // TODO: Implementar modal de mensaje grupal
-      toastStore.info('Funcionalidad de mensaje grupal en desarrollo')
-    }
-    
+
     const volverAtras = () => {
       router.push('/dashboard-docente')
     }
@@ -871,12 +809,6 @@ const refrescarEstudiantes = () => {
   cargarTodosLosEstudiantes()
 }
 
-// MODIFICAR el método que abre el modal
-const abrirModalInvitar = () => {
-  mostrarModalInvitar.value = true
-  tabInvitacion.value = 'asignar' //  Abrir directamente en asignar
-  cargarTodosLosEstudiantes() //  Cargar estudiantes
-}
 
     // Cerrar dropdown al hacer click fuera
     const handleClickOutside = (event) => {
@@ -937,18 +869,14 @@ const abrirModalInvitar = () => {
       confirmarDesvinculacion,
       desvincularEstudiante,
       enviarInvitacion,
-      generarCodigo,
       copiarCodigo,
       generarNuevoCodigo,
       compartirCodigo,
-      exportarDatos,
-      enviarMensajeGrupal,
       volverAtras,
       cargarTodosLosEstudiantes,
       asignarEstudiante,
       desasignarEstudiante,
-      refrescarEstudiantes,
-      abrirModalInvitar
+      refrescarEstudiantes
     }
   }
 }
