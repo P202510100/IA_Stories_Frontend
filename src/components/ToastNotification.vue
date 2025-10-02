@@ -1,87 +1,210 @@
-<template>
-  <Teleport to="body">
-    <div class="toast-container">
-      <TransitionGroup name="toast" tag="div" class="toast-group">
-        <div
-          v-for="toast in toasts"
-          :key="toast.id"
-          class="toast"
-          :class="getToastClass(toast)"
-          @click="handleToastClick(toast)"
-        >
-          <!-- Barra de progreso -->
-          <div v-if="toast.showProgress && toast.progress > 0" class="toast-progress">
-            <div 
-              class="toast-progress-bar" 
-              :style="{ width: toast.progress + '%' }"
-              :class="getProgressClass(toast.type)"
-            ></div>
-          </div>
-          
-          <!-- Contenido principal -->
-          <div class="toast-main">
-            <div class="toast-icon" :class="getIconClass(toast.type)">
-              {{ getToastIcon(toast.type) }}
-            </div>
-            
-            <div class="toast-content">
-              <div v-if="toast.title" class="toast-title">
-                {{ toast.title }}
-              </div>
-              <div class="toast-message">
-                {{ toast.message }}
-              </div>
-              
-              <!-- Metadata -->
-              <div v-if="toast.metadata" class="toast-metadata">
-                <span v-if="toast.metadata.source" class="toast-source">
-                  {{ formatSource(toast.metadata.source) }}
-                </span>
-                <span v-if="toast.metadata.timestamp" class="toast-time">
-                  {{ formatTime(toast.metadata.timestamp) }}
-                </span>
-              </div>
-              
-              <!-- Acciones -->
-              <div v-if="toast.actions && toast.actions.length > 0" class="toast-actions">
-                <button
-                  v-for="action in toast.actions"
-                  :key="action.id"
-                  @click.stop="handleAction(action, toast)"
-                  class="toast-action-btn"
-                  :class="action.style || 'primary'"
-                >
-                  <span v-if="action.icon" class="action-icon">{{ action.icon }}</span>
-                  {{ action.label }}
-                </button>
-              </div>
-            </div>
-            
-            <!-- Botón cerrar -->
-            <button 
-              @click.stop="removeToast(toast.id)"
-              class="toast-close"
-              :aria-label="`Cerrar notificación: ${toast.title || toast.message}`"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      </TransitionGroup>
-    </div>
-  </Teleport>
-</template>
-
 <script>
-import { computed } from 'vue'
-import { useToastStore } from '@/stores/toast'
+import { defineStore } from 'pinia'
+import { ref, reactive } from 'vue'
+
+// ============================================================================
+// 🏪 STORE - DEBE IR PRIMERO Y EXPORTARSE ANTES DEL COMPONENTE
+// ============================================================================
+
+export const useToastStore = defineStore('toast', () => {
+  const toasts = ref([])
+  let toastIdCounter = 0
+  
+  function getDefaultDuration(type) {
+    const durations = {
+      success: 4000,
+      error: 6000,
+      warning: 5000,
+      info: 4000,
+      loading: 0
+    }
+    return durations[type] || 4000
+  }
+  
+  function addToast(options) {
+    const {
+      type = 'info',
+      title,
+      message,
+      duration = getDefaultDuration(type),
+      persistent = false,
+      showProgress = true,
+      actions = [],
+      metadata = {},
+      clickable = false,
+      onClick = null
+    } = options
+    
+    const id = ++toastIdCounter
+    const toast = reactive({
+      id,
+      type,
+      title,
+      message,
+      duration,
+      persistent,
+      showProgress: showProgress && duration > 0,
+      actions,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString(),
+        source: metadata.source || 'system'
+      },
+      clickable,
+      onClick,
+      progress: 100,
+      startTime: Date.now()
+    })
+    
+    toasts.value.push(toast)
+    
+    if (duration > 0 && !persistent) {
+      setupAutoRemoval(toast)
+    }
+    
+    if (toasts.value.length > 5) {
+      const oldestNonPersistent = toasts.value
+        .filter(t => !t.persistent)
+        .sort((a, b) => a.startTime - b.startTime)[0]
+      
+      if (oldestNonPersistent) {
+        removeToast(oldestNonPersistent.id)
+      }
+    }
+    
+    return id
+  }
+  
+  function removeToast(id) {
+    const index = toasts.value.findIndex(toast => toast.id === id)
+    if (index > -1) {
+      toasts.value.splice(index, 1)
+    }
+  }
+  
+  function clearAll() {
+    toasts.value = []
+  }
+  
+  function clearByType(type) {
+    toasts.value = toasts.value.filter(toast => toast.type !== type)
+  }
+  
+  function setupAutoRemoval(toast) {
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - toast.startTime
+      const remaining = Math.max(0, toast.duration - elapsed)
+      toast.progress = (remaining / toast.duration) * 100
+      
+      if (remaining <= 0) {
+        clearInterval(interval)
+        removeToast(toast.id)
+      }
+    }, 50)
+  }
+  
+  // Helpers
+  function success(message, title = '✅ Éxito', options = {}) {
+    return addToast({ type: 'success', title, message, ...options })
+  }
+  
+  function error(message, title = '❌ Error', options = {}) {
+    return addToast({ type: 'error', title, message, duration: 6000, ...options })
+  }
+  
+  function warning(message, title = '⚠️ Advertencia', options = {}) {
+    return addToast({ type: 'warning', title, message, ...options })
+  }
+  
+  function info(message, title = 'ℹ️ Información', options = {}) {
+    return addToast({ type: 'info', title, message, ...options })
+  }
+  
+  function loading(message, title = '⏳ Cargando...', options = {}) {
+    return addToast({ type: 'loading', title, message, duration: 0, persistent: true, showProgress: false, ...options })
+  }
+  
+  function questionAnswered(isCorrect, points, options = {}) {
+    if (isCorrect) {
+      return success(`¡Correcto! Has ganado ${points} puntos`, '🎉 ¡Excelente!', { metadata: { source: 'quiz', points }, ...options })
+    } else {
+      return error('No te preocupes, inténtalo de nuevo', '❌ Respuesta incorrecta', { metadata: { source: 'quiz' }, ...options })
+    }
+  }
+  
+  function storyGenerated(storyTitle, options = {}) {
+    return success(
+      `Tu historia "${storyTitle}" está lista para leer`,
+      '📖 ¡Historia creada!',
+      {
+        actions: [{ id: 'view', label: 'Ver Historia', icon: '👀', style: 'primary' }],
+        metadata: { source: 'story-generation' },
+        clickable: true,
+        ...options
+      }
+    )
+  }
+  
+  function levelUp(newLevel, options = {}) {
+    return success(`¡Has alcanzado el nivel ${newLevel}!`, '🆙 ¡Subiste de nivel!', { duration: 6000, metadata: { source: 'gamification', level: newLevel }, ...options })
+  }
+  
+  function apiError(endpoint, errorMessage, options = {}) {
+    return error(
+      `Error conectando con el servidor: ${errorMessage}`,
+      '🌐 Error de conexión',
+      {
+        metadata: { source: 'api', endpoint },
+        actions: [{ id: 'retry', label: 'Reintentar', icon: '🔄', style: 'secondary' }],
+        ...options
+      }
+    )
+  }
+  
+  function studentJoined(studentName, options = {}) {
+    return info(`${studentName} se ha unido a tu clase`, '👋 Nuevo estudiante', { metadata: { source: 'class-management' }, ...options })
+  }
+  
+  function assignmentCompleted(studentName, assignmentTitle, options = {}) {
+    return success(
+      `${studentName} ha completado "${assignmentTitle}"`,
+      '📋 Actividad completada',
+      {
+        metadata: { source: 'assignments' },
+        actions: [{ id: 'view-results', label: 'Ver Resultados', icon: '📊', style: 'primary' }],
+        ...options
+      }
+    )
+  }
+  
+  return {
+    toasts,
+    addToast,
+    removeToast,
+    clearAll,
+    clearByType,
+    success,
+    error,
+    warning,
+    info,
+    loading,
+    questionAnswered,
+    storyGenerated,
+    levelUp,
+    apiError,
+    studentJoined,
+    assignmentCompleted
+  }
+})
+
+// ============================================================================
+// 🎨 COMPONENTE - EXPORT DEFAULT AL FINAL
+// ============================================================================
 
 export default {
   name: 'ToastNotification',
   setup() {
     const toastStore = useToastStore()
-    
-    const toasts = computed(() => toastStore.toasts)
     
     const getToastClass = (toast) => {
       const classes = [`toast-${toast.type}`]
@@ -153,8 +276,6 @@ export default {
     }
     
     const handleAction = (action, toast) => {
-      console.log(`🎯 Acción ejecutada: ${action.label}`)
-      
       const event = new CustomEvent('toast-action', {
         detail: { action, toast }
       })
@@ -172,7 +293,7 @@ export default {
     }
     
     return {
-      toasts,
+      toasts: toastStore.toasts,
       getToastClass,
       getIconClass,
       getToastIcon,
@@ -187,11 +308,76 @@ export default {
 }
 </script>
 
-<style scoped>
-/* ============================================================================ */
-/* 🎨 CONTENEDOR PRINCIPAL */
-/* ============================================================================ */
+<template>
+  <Teleport to="body">
+    <div class="toast-container">
+      <TransitionGroup name="toast" tag="div" class="toast-group">
+        <div
+          v-for="toast in toasts"
+          :key="toast.id"
+          class="toast"
+          :class="getToastClass(toast)"
+          @click="handleToastClick(toast)"
+        >
+          <div v-if="toast.showProgress && toast.progress > 0" class="toast-progress">
+            <div 
+              class="toast-progress-bar" 
+              :style="{ width: toast.progress + '%' }"
+              :class="getProgressClass(toast.type)"
+            ></div>
+          </div>
+          
+          <div class="toast-main">
+            <div class="toast-icon" :class="getIconClass(toast.type)">
+              {{ getToastIcon(toast.type) }}
+            </div>
+            
+            <div class="toast-content">
+              <div v-if="toast.title" class="toast-title">
+                {{ toast.title }}
+              </div>
+              <div class="toast-message">
+                {{ toast.message }}
+              </div>
+              
+              <div v-if="toast.metadata" class="toast-metadata">
+                <span v-if="toast.metadata.source" class="toast-source">
+                  {{ formatSource(toast.metadata.source) }}
+                </span>
+                <span v-if="toast.metadata.timestamp" class="toast-time">
+                  {{ formatTime(toast.metadata.timestamp) }}
+                </span>
+              </div>
+              
+              <div v-if="toast.actions && toast.actions.length > 0" class="toast-actions">
+                <button
+                  v-for="action in toast.actions"
+                  :key="action.id"
+                  @click.stop="handleAction(action, toast)"
+                  class="toast-action-btn"
+                  :class="action.style || 'primary'"
+                >
+                  <span v-if="action.icon" class="action-icon">{{ action.icon }}</span>
+                  {{ action.label }}
+                </button>
+              </div>
+            </div>
+            
+            <button 
+              @click.stop="removeToast(toast.id)"
+              class="toast-close"
+              :aria-label="`Cerrar notificación: ${toast.title || toast.message}`"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </TransitionGroup>
+    </div>
+  </Teleport>
+</template>
 
+<style scoped>
 .toast-container {
   position: fixed;
   top: 20px;
@@ -208,18 +394,12 @@ export default {
   gap: 12px;
 }
 
-/* ============================================================================ */
-/* 🍞 ESTILOS BASE DEL TOAST */
-/* ============================================================================ */
-
 .toast {
   pointer-events: all;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-radius: 16px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.12),
-    0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -229,9 +409,7 @@ export default {
 
 .toast:hover {
   transform: translateY(-2px);
-  box-shadow: 
-    0 12px 40px rgba(0, 0, 0, 0.15),
-    0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .toast.toast-clickable {
@@ -245,10 +423,6 @@ export default {
 .toast.toast-with-actions {
   min-height: 100px;
 }
-
-/* ============================================================================ */
-/* 📊 BARRA DE PROGRESO */
-/* ============================================================================ */
 
 .toast-progress {
   position: absolute;
@@ -285,10 +459,6 @@ export default {
 .progress-loading {
   background: linear-gradient(45deg, #667eea, #764ba2);
 }
-
-/* ============================================================================ */
-/* 📄 CONTENIDO PRINCIPAL */
-/* ============================================================================ */
 
 .toast-main {
   display: flex;
@@ -381,10 +551,6 @@ export default {
   font-style: italic;
 }
 
-/* ============================================================================ */
-/* 🎯 ACCIONES */
-/* ============================================================================ */
-
 .toast-actions {
   display: flex;
   gap: 8px;
@@ -427,10 +593,6 @@ export default {
   font-size: 1em;
 }
 
-/* ============================================================================ */
-/* ❌ BOTÓN CERRAR */
-/* ============================================================================ */
-
 .toast-close {
   background: none;
   border: none;
@@ -455,10 +617,6 @@ export default {
   transform: scale(1.1);
 }
 
-/* ============================================================================ */
-/* 🎨 VARIANTES DE TIPO */
-/* ============================================================================ */
-
 .toast-success {
   border-left: 4px solid #4caf50;
 }
@@ -478,10 +636,6 @@ export default {
 .toast-loading {
   border-left: 4px solid #667eea;
 }
-
-/* ============================================================================ */
-/* 🎭 ANIMACIONES */
-/* ============================================================================ */
 
 .toast-enter-active {
   transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -505,10 +659,6 @@ export default {
   transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* ============================================================================ */
-/* 📱 RESPONSIVE */
-/* ============================================================================ */
-
 @media (max-width: 768px) {
   .toast-container {
     left: 15px;
@@ -526,85 +676,6 @@ export default {
     width: 28px;
     height: 28px;
     font-size: 1.1em;
-  }
-  
-  .toast-title {
-    font-size: 0.9em;
-  }
-  
-  .toast-message {
-    font-size: 0.85em;
-  }
-  
-  .toast-actions {
-    flex-direction: column;
-    gap: 6px;
-  }
-  
-  .toast-action-btn {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .toast-container {
-    left: 10px;
-    right: 10px;
-    top: 10px;
-  }
-  
-  .toast-main {
-    padding: 12px;
-  }
-  
-  .toast-metadata {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-}
-
-/* ============================================================================ */
-/* 🌙 MODO OSCURO */
-/* ============================================================================ */
-
-@media (prefers-color-scheme: dark) {
-  .toast {
-    background: rgba(45, 55, 72, 0.95);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .toast-title {
-    color: #e2e8f0;
-  }
-  
-  .toast-message {
-    color: #cbd5e0;
-  }
-  
-  .toast-metadata {
-    color: #a0aec0;
-  }
-  
-  .toast-source {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
-  }
-  
-  .toast-close {
-    color: #a0aec0;
-  }
-  
-  .toast-close:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
-  }
-  
-  .toast-action-btn.secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
-    border-color: rgba(255, 255, 255, 0.2);
   }
 }
 </style>
