@@ -178,7 +178,7 @@
             <div class="intereses-actions">
               <button @click="guardarIntereses" class="btn btn-primary" :disabled="guardandoIntereses">
                 <span v-if="guardandoIntereses">💾 Guardando...</span>
-                <span v-else">💾 Guardar Intereses</span>
+                <span v-else>💾 Guardar Intereses</span>
               </button>
               <button @click="cancelarEdicionIntereses" class="btn btn-secondary">
                 ❌ Cancelar
@@ -592,15 +592,16 @@ export default {
         
         // Cargar configuraciones desde el backend
         try {
-          const configResponse = await apiService.obtenerConfiguracionesUsuario(user.value.id)
-          configuraciones.value = {
-            ...configuraciones.value,
-            ...configResponse.configuraciones
-          }
-        } catch (err) {
-          console.warn('⚠️ No se pudieron cargar las configuraciones:', err)
-          // Mantener configuraciones por defecto
-        }
+  const configsGuardadas = localStorage.getItem(`configuraciones_${user.value.id}`)
+  if (configsGuardadas) {
+    configuraciones.value = {
+      ...configuraciones.value,
+      ...JSON.parse(configsGuardadas)
+    }
+  }
+} catch (err) {
+  console.warn('⚠️ No se pudieron cargar las configuraciones locales:', err)
+}
         
         console.log('✅ Datos del perfil cargados correctamente')
         
@@ -787,22 +788,31 @@ export default {
     // ============================================================================
     
     const guardarConfiguraciones = async () => {
-      try {
-        console.log('⚙️ Guardando configuraciones...')
-        
-        await apiService.actualizarConfiguracionesUsuario(
-          user.value.id,
-          configuraciones.value
-        )
-        
-        toastStore.success('Configuraciones guardadas')
-        console.log('✅ Configuraciones actualizadas')
-        
-      } catch (err) {
-        console.error('❌ Error guardando configuraciones:', err)
-        toastStore.error('Error al guardar las configuraciones')
-      }
-    }
+  try {
+    guardandoConfiguraciones.value = true
+    
+    console.log('⚙️ Guardando configuraciones...')
+    
+    
+    // Cuando el backend tenga el endpoint, descomentar la siguiente línea:
+    // await apiService.actualizarConfiguracionesUsuario(user.value.id, configuraciones.value)
+    
+    // Guardar en localStorage como fallback
+    localStorage.setItem(
+      `configuraciones_${user.value.id}`, 
+      JSON.stringify(configuraciones.value)
+    )
+    
+    toastStore.success('Configuraciones guardadas')
+    console.log('✅ Configuraciones actualizadas localmente')
+    
+  } catch (err) {
+    console.error('❌ Error guardando configuraciones:', err)
+    toastStore.error('Error al guardar las configuraciones')
+  } finally {
+    guardandoConfiguraciones.value = false
+  }
+}
     
     // ============================================================================
     // 🗑️ ELIMINACIÓN DE CUENTA
@@ -826,7 +836,7 @@ export default {
         
         console.log('🗑️ Eliminando cuenta...')
         
-        await apiService.eliminarCuenta(user.value.id)
+        await apiService.deleteUser(user.value.id)
         
         // Cerrar sesión y limpiar datos
         authStore.logout()
