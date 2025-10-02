@@ -1,55 +1,56 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 // ============================================================================
-//  DEFINICIÓN DE RUTAS
+// 📦 DEFINICIÓN DE RUTAS
 // ============================================================================
+import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
+import ResetPasswordView from '@/views/ResetPasswordView.vue'
 
 const routes = [
   // ============================================================================
-  //  RUTA RAÍZ - 
+  // 🏠 RUTA RAÍZ
   // ============================================================================
   {
     path: '/',
-  name: 'Home',
-  redirect: (to) => {
-    console.log(' Router: Verificando redirección desde:', to.fullPath)
-    
-    
-    const urlParams = new URLSearchParams(to.fullPath.split('?')[1] || '')
-    const forceLogin = urlParams.get('force') === 'true'
-    
-    if (forceLogin) {
-      console.log(' Router: force=true detectado, redirigiendo a login')
-      return '/login?force=true'
-    }
-    
-  
-    const user = localStorage.getItem('user')
-    if (user) {
-      try {
-        const userData = JSON.parse(user)
-        console.log(' Router: Usuario encontrado en localStorage:', userData.tipo)
-        
-        if (userData.tipo === 'alumno') {
-          console.log(' Router: Redirigiendo a dashboard alumno')
-          return '/dashboard-alumno'
-        } else if (userData.tipo === 'docente') {
-          console.log(' Router: Redirigiendo a dashboard docente')
-          return '/dashboard-docente'
-        }
-      } catch (e) {
-        console.error(' Router: Error parsing user data:', e)
-        localStorage.removeItem('user')
+    name: 'Home',
+    redirect: (to) => {
+      console.log('🏠 Router: Verificando redirección desde:', to.fullPath)
+      
+      const urlParams = new URLSearchParams(to.fullPath.split('?')[1] || '')
+      const forceLogin = urlParams.get('force') === 'true'
+      
+      if (forceLogin) {
+        console.log('🔒 Router: force=true detectado, redirigiendo a login')
+        return '/login?force=true'
       }
+      
+      const user = localStorage.getItem('user')
+      if (user) {
+        try {
+          const userData = JSON.parse(user)
+          console.log('👤 Router: Usuario encontrado en localStorage:', userData.tipo)
+          
+          if (userData.tipo === 'alumno') {
+            console.log('👨‍🎓 Router: Redirigiendo a dashboard alumno')
+            return '/dashboard-alumno'
+          } else if (userData.tipo === 'docente') {
+            console.log('👨‍🏫 Router: Redirigiendo a dashboard docente')
+            return '/dashboard-docente'
+          }
+        } catch (e) {
+          console.error('❌ Router: Error parsing user data:', e)
+          localStorage.removeItem('user')
+        }
+      }
+      
+      console.log('🔓 Router: No hay usuario autenticado, redirigiendo a login')
+      return '/login'
     }
-    
-    console.log(' Router: No hay usuario autenticado, redirigiendo a login')
-    return '/login'
-  }
   },
   
   // ============================================================================
-  //  RUTAS PÚBLICAS 
+  // 🌐 RUTAS PÚBLICAS
   // ============================================================================
   {
     path: '/login',
@@ -71,16 +72,33 @@ const routes = [
     }
   },
   
+  // ============================================================================
+  // 🔐 RUTAS DE RECUPERACIÓN DE CONTRASEÑA
+  // ============================================================================
   {
     path: '/forgot-password',
     name: 'ForgotPassword',
-    component: () => import('../views/ForgotPasswordView.vue'),
+    component: ForgotPasswordView,
     meta: { 
-      requiresGuest: true,
+      requiresAuth: false,
+      requiresGuest: false,  
+      isRecoveryRoute: true,  
       title: 'Recuperar Contraseña - IaStories'
     }
   },
-  
+
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: ResetPasswordView,
+    meta: { 
+      requiresAuth: false,
+      requiresGuest: false,  // 👈 Permite acceso siempre
+      isRecoveryRoute: true,  // 👈 Marca especial
+      title: 'Restablecer Contraseña - IaStories'
+    }
+  },
+
   // ============================================================================
   //  RUTAS DE ALUMNO (REQUIEREN AUTENTICACIÓN + TIPO ALUMNO)
   // ============================================================================
@@ -143,7 +161,7 @@ const routes = [
   },
   
   // ============================================================================
-  // 👨 RUTAS DE DOCENTE (REQUIEREN AUTENTICACIÓN + TIPO DOCENTE)
+  //  RUTAS DE DOCENTE (REQUIEREN AUTENTICACIÓN + TIPO DOCENTE)
   // ============================================================================
   {
     path: '/dashboard-docente', 
@@ -215,7 +233,6 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   scrollBehavior(to, from, savedPosition) {
-    // Restaurar posición guardada o ir al top
     if (savedPosition) {
       return savedPosition
     } else if (to.hash) {
@@ -227,11 +244,11 @@ const router = createRouter({
 })
 
 // ============================================================================
-//  GUARDS DE NAVEGACIÓN MEJORADOS
+//  GUARDS DE NAVEGACIÓN
 // ============================================================================
 
 router.beforeEach(async (to, from, next) => {
-  console.log(` Navegando a: ${to.path}`)
+  console.log(`🧭 Navegando a: ${to.path}`)
   
   try {
     // Importar dinámicamente el store de auth
@@ -239,8 +256,20 @@ router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore()
     
     // ============================================================================
-    //  INICIALIZAR AUTENTICACIÓN SOLO SI NO ESTÁ INICIALIZADA
+    //  PERMITIR ACCESO LIBRE A RUTAS DE RECUPERACIÓN
     // ============================================================================
+    
+    // IMPORTANTE: Esto debe estar ANTES de cualquier otra verificación
+    if (to.meta.isRecoveryRoute) {
+      console.log('🔓 Ruta de recuperación detectada, permitiendo acceso libre')
+      document.title = to.meta.title || 'IaStories - Educación con IA'
+      next()
+      return
+    }
+    
+    // ============================================================================
+    //  INICIALIZAR AUTENTICACIÓN
+    // ===========================================================================
     
     if (!authStore.user && localStorage.getItem('user')) {
       console.log('🔄 Inicializando autenticación desde localStorage...')
@@ -251,59 +280,55 @@ router.beforeEach(async (to, from, next) => {
     const userType = authStore.userType
     const user = authStore.user
 
-    console.log(`📊 Estado auth: ${isAuthenticated ? 'autenticado' : 'no autenticado'}, tipo: ${userType}`)
+    console.log(`📊 Estado auth: ${isAuthenticated ? '✅ autenticado' : '❌ no autenticado'}, tipo: ${userType || 'ninguno'}`)
 
     // ============================================================================
     //  VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
     // ============================================================================
     
     if (to.meta.requiresAuth && !isAuthenticated) {
-      console.log(' Acceso denegado: requiere autenticación')
-      // Limpiar datos potencialmente corruptos
+      console.log('❌ Acceso denegado: requiere autenticación')
       localStorage.removeItem('user')
       next('/login')
       return
     }
 
     // ============================================================================
-    //  VERIFICAR RUTAS SOLO PARA INVITADOS (YA AUTENTICADOS)
+    //  VERIFICAR RUTAS SOLO PARA INVITADOS
     // ============================================================================
     
-   if (to.meta.requiresGuest && isAuthenticated) {
-  
-  // ✅ VERIFICAR SI HAY FORCE=TRUE PARA PERMITIR LOGIN FORZADO
-  const forceLogin = to.query.force === 'true' || new URLSearchParams(to.fullPath.split('?')[1] || '').get('force') === 'true'
-  
-  if (forceLogin) {
-    console.log('🔒 Guard: force=true detectado, permitiendo acceso al login')
-    // Limpiar sesión para force login
-    const { useAuthStore } = await import('../stores/auth.js')
-    const authStore = useAuthStore()
-    authStore.logout()
-    next()
-    return
-  }
-  
-  console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
-  
-  if (userType === 'alumno') {
-    next('/dashboard-alumno')
-  } else if (userType === 'docente') {
-    next('/dashboard-docente')
-  } else {
-    console.warn('⚠️ Tipo de usuario desconocido:', userType)
-    authStore.logout()
-    next('/login')
-  }
-  return
-}
+    if (to.meta.requiresGuest && isAuthenticated) {
+      //  VERIFICAR SI HAY FORCE=TRUE PARA PERMITIR LOGIN FORZADO
+      const forceLogin = to.query.force === 'true' || 
+                        new URLSearchParams(to.fullPath.split('?')[1] || '').get('force') === 'true'
+      
+      if (forceLogin) {
+        console.log('🔒 Guard: force=true detectado, permitiendo acceso al login')
+        authStore.logout()
+        next()
+        return
+      }
+      
+      console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
+      
+      if (userType === 'alumno') {
+        next('/dashboard-alumno')
+      } else if (userType === 'docente') {
+        next('/dashboard-docente')
+      } else {
+        console.warn('⚠️ Tipo de usuario desconocido:', userType)
+        authStore.logout()
+        next('/login')
+      }
+      return
+    }
 
     // ============================================================================
     //  VERIFICAR TIPO DE USUARIO ESPECÍFICO
     // ============================================================================
     
     if (to.meta.userType && userType !== to.meta.userType) {
-      console.log(` Acceso denegado: requiere ${to.meta.userType}, usuario es ${userType}`)
+      console.log(`❌ Acceso denegado: requiere ${to.meta.userType}, usuario es ${userType}`)
       
       // Redirigir al dashboard correcto del usuario actual
       if (userType === 'alumno') {
@@ -311,7 +336,7 @@ router.beforeEach(async (to, from, next) => {
       } else if (userType === 'docente') {
         next('/dashboard-docente')
       } else {
-        console.warn(' Tipo de usuario inválido, cerrando sesión')
+        console.warn('⚠️ Tipo de usuario inválido, cerrando sesión')
         authStore.logout()
         next('/login')
       }
@@ -322,21 +347,21 @@ router.beforeEach(async (to, from, next) => {
     //  VALIDACIONES ESPECÍFICAS DE RUTAS
     // ============================================================================
     
-    // Validar ID de historia para rutas que lo requieren
+    // Validar ID de historia
     if (to.name === 'VerHistoria' && to.params.id) {
       const historiaId = parseInt(to.params.id)
       if (isNaN(historiaId) || historiaId <= 0) {
-        console.log(' ID de historia inválido')
+        console.log('❌ ID de historia inválido')
         next('/mis-historias')
         return
       }
     }
     
-    // Validar ID de estudiante para rutas de docente
+    // Validar ID de estudiante
     if (to.name === 'DetalleEstudiante' && to.params.id) {
       const estudianteId = parseInt(to.params.id)
       if (isNaN(estudianteId) || estudianteId <= 0) {
-        console.log(' ID de estudiante inválido')
+        console.log('❌ ID de estudiante inválido')
         next('/dashboard-docente')
         return
       }
@@ -352,11 +377,11 @@ router.beforeEach(async (to, from, next) => {
     //  PERMITIR NAVEGACIÓN
     // ============================================================================
     
-    console.log(' Navegación permitida')
+    console.log('✅ Navegación permitida')
     next()
     
   } catch (error) {
-    console.error(' Error en guard de navegación:', error)
+    console.error('❌ Error en guard de navegación:', error)
     
     // En caso de error crítico, limpiar todo y redirigir al login
     try {
@@ -364,7 +389,7 @@ router.beforeEach(async (to, from, next) => {
       const authStore = useAuthStore()
       authStore.logout()
     } catch (e) {
-      console.error('Error limpiando store:', e)
+      console.error('❌ Error limpiando store:', e)
     }
     
     localStorage.removeItem('user')
@@ -378,7 +403,7 @@ router.beforeEach(async (to, from, next) => {
 // ============================================================================
 
 router.afterEach((to, from) => {
-  console.log(` Navegación completada: ${from.path} → ${to.path}`)
+  console.log(`✅ Navegación completada: ${from.path} → ${to.path}`)
   
   // Cerrar menús móviles si están abiertos
   const mobileMenus = document.querySelectorAll('.mobile-menu, .user-menu, .dropdown-menu')
@@ -394,19 +419,19 @@ router.afterEach((to, from) => {
 // ============================================================================
 
 router.onError((error, to, from) => {
-  console.error(' Error de navegación:', error)
+  console.error('🚨 Error de navegación:', error)
   
-  // Errores comunes de chunk loading (código dividido)
+  // Errores comunes de chunk loading
   if (error.message.includes('Loading chunk') || 
       error.message.includes('Loading CSS chunk') ||
       error.message.includes('Failed to fetch dynamically imported module')) {
-    console.log(' Error de chunk loading, recargando página...')
+    console.log('🔄 Error de chunk loading, recargando página...')
     window.location.reload()
     return
   }
   
-  // Otros errores de navegación - ir siempre al login en caso de error
-  console.log(' Error de navegación no recuperable, redirigiendo al login')
+  // Otros errores - redirigir al login
+  console.log('❌ Error de navegación no recuperable, redirigiendo al login')
   router.push('/login')
 })
 

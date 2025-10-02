@@ -1,12 +1,14 @@
 
 import axios from 'axios'
 
+const API_URL = 'http://localhost:5000'
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 45000, // Aumentado para generación IA
+  timeout: 10000, // Aumentado para generación IA
 })
 
 // Interceptor para manejar errores
@@ -36,6 +38,41 @@ const apiService = {
   async forgotPassword(email) {
     const response = await api.post('/auth/forgot-password', { email })
     return response.data
+  },
+
+ async resetPassword(token, newPassword) {
+    try {
+      console.log('📡 API: Restableciendo contraseña...')
+      
+      const response = await api.post('/auth/reset-password', {
+        token: token,
+        new_password: newPassword
+      })
+      
+      console.log('✅ API: Contraseña restablecida')
+      return response.data
+      
+    } catch (error) {
+      console.error('❌ API: Error restableciendo contraseña:', error.response?.data || error.message)
+      throw error
+    }
+  },
+
+  async validateResetToken(token) {
+    try {
+      console.log('📡 API: Validando token de reset...')
+      
+      const response = await api.post('/auth/validate-reset-token', {
+        token: token
+      })
+      
+      console.log('✅ API: Token válido')
+      return response.data
+      
+    } catch (error) {
+      console.error('❌ API: Token inválido:', error.response?.data || error.message)
+      throw error
+    }
   },
 
   async updateUser(userId, userData) {

@@ -1,4 +1,3 @@
-<!-- components/ToastNotification.vue - INTEGRADO 100% CON EL BACKEND -->
 <template>
   <Teleport to="body">
     <div class="toast-container">
@@ -10,7 +9,7 @@
           :class="getToastClass(toast)"
           @click="handleToastClick(toast)"
         >
-          <!-- Barra de progreso para toasts con duración -->
+          <!-- Barra de progreso -->
           <div v-if="toast.showProgress && toast.progress > 0" class="toast-progress">
             <div 
               class="toast-progress-bar" 
@@ -19,7 +18,7 @@
             ></div>
           </div>
           
-          <!-- Contenido principal del toast -->
+          <!-- Contenido principal -->
           <div class="toast-main">
             <div class="toast-icon" :class="getIconClass(toast.type)">
               {{ getToastIcon(toast.type) }}
@@ -33,7 +32,7 @@
                 {{ toast.message }}
               </div>
               
-              <!-- Metadata adicional -->
+              <!-- Metadata -->
               <div v-if="toast.metadata" class="toast-metadata">
                 <span v-if="toast.metadata.source" class="toast-source">
                   {{ formatSource(toast.metadata.source) }}
@@ -43,7 +42,7 @@
                 </span>
               </div>
               
-              <!-- Acciones si existen -->
+              <!-- Acciones -->
               <div v-if="toast.actions && toast.actions.length > 0" class="toast-actions">
                 <button
                   v-for="action in toast.actions"
@@ -58,7 +57,7 @@
               </div>
             </div>
             
-            <!-- Botón de cerrar -->
+            <!-- Botón cerrar -->
             <button 
               @click.stop="removeToast(toast.id)"
               class="toast-close"
@@ -74,328 +73,21 @@
 </template>
 
 <script>
-import { defineStore } from 'pinia'
-import { ref, reactive } from 'vue'
-
-// ============================================================================
-// 🏪 STORE PARA MANEJAR NOTIFICACIONES TOAST
-// ============================================================================
-
-export const useToastStore = defineStore('toast', () => {
-  const toasts = ref([])
-  let toastIdCounter = 0
-  
-  // ============================================================================
-  // 🔧 MÉTODOS PRINCIPALES
-  // ============================================================================
-  
-  function addToast(options) {
-    const {
-      type = 'info',
-      title,
-      message,
-      duration = getDefaultDuration(type),
-      persistent = false,
-      showProgress = true,
-      actions = [],
-      metadata = {},
-      clickable = false,
-      onClick = null
-    } = options
-    
-    const id = ++toastIdCounter
-    const toast = reactive({
-      id,
-      type,
-      title,
-      message,
-      duration,
-      persistent,
-      showProgress: showProgress && duration > 0,
-      actions,
-      metadata: {
-        ...metadata,
-        timestamp: new Date().toISOString(),
-        source: metadata.source || 'system'
-      },
-      clickable,
-      onClick,
-      progress: 100,
-      startTime: Date.now()
-    })
-    
-    toasts.value.push(toast)
-    
-    // Auto-remove después de duración (si no es persistente)
-    if (duration > 0 && !persistent) {
-      setupAutoRemoval(toast)
-    }
-    
-    // Limitar número máximo de toasts
-    if (toasts.value.length > 5) {
-      const oldestNonPersistent = toasts.value
-        .filter(t => !t.persistent)
-        .sort((a, b) => a.startTime - b.startTime)[0]
-      
-      if (oldestNonPersistent) {
-        removeToast(oldestNonPersistent.id)
-      }
-    }
-    
-    console.log(`🍞 Toast añadido: ${type} - ${message}`)
-    return id
-  }
-  
-  function removeToast(id) {
-    const index = toasts.value.findIndex(toast => toast.id === id)
-    if (index > -1) {
-      console.log(`🗑️ Toast removido: ${toasts.value[index].message}`)
-      toasts.value.splice(index, 1)
-    }
-  }
-  
-  function clearAll() {
-    console.log('🧹 Limpiando todos los toasts')
-    toasts.value = []
-  }
-  
-  function clearByType(type) {
-    const initialLength = toasts.value.length
-    toasts.value = toasts.value.filter(toast => toast.type !== type)
-    console.log(`🗑️ Removidos ${initialLength - toasts.value.length} toasts de tipo ${type}`)
-  }
-  
-  // ============================================================================
-  // ⏰ MANEJO DE PROGRESO Y AUTO-REMOVAL
-  // ============================================================================
-  
-  function setupAutoRemoval(toast) {
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - toast.startTime
-      const remaining = Math.max(0, toast.duration - elapsed)
-      toast.progress = (remaining / toast.duration) * 100
-      
-      if (remaining <= 0) {
-        clearInterval(interval)
-        removeToast(toast.id)
-      }
-    }, 50) // Actualizar cada 50ms para suavidad
-  }
-  
-  function getDefaultDuration(type) {
-    const durations = {
-      success: 4000,
-      error: 6000,
-      warning: 5000,
-      info: 4000,
-      loading: 0 // Persistente por defecto
-    }
-    return durations[type] || 4000
-  }
-  
-  // ============================================================================
-  // 🎯 MÉTODOS DE CONVENIENCIA INTEGRADOS CON EL BACKEND
-  // ============================================================================
-  
-  function success(message, title = null, options = {}) {
-    return addToast({
-      type: 'success',
-      title: title || '✅ Éxito',
-      message,
-      ...options
-    })
-  }
-  
-  function error(message, title = null, options = {}) {
-    return addToast({
-      type: 'error',
-      title: title || '❌ Error',
-      message,
-      duration: 6000,
-      ...options
-    })
-  }
-  
-  function warning(message, title = null, options = {}) {
-    return addToast({
-      type: 'warning',
-      title: title || '⚠️ Advertencia',
-      message,
-      ...options
-    })
-  }
-  
-  function info(message, title = null, options = {}) {
-    return addToast({
-      type: 'info',
-      title: title || 'ℹ️ Información',
-      message,
-      ...options
-    })
-  }
-  
-  function loading(message, title = null, options = {}) {
-    return addToast({
-      type: 'loading',
-      title: title || '⏳ Cargando',
-      message,
-      persistent: true,
-      showProgress: false,
-      ...options
-    })
-  }
-  
-  // ============================================================================
-  // 🎓 MÉTODOS ESPECÍFICOS PARA CONTEXTO EDUCATIVO
-  // ============================================================================
-  
-  function questionAnswered(isCorrect, points = 0, options = {}) {
-    if (isCorrect) {
-      return success(
-        `¡Respuesta correcta! Has ganado ${points} puntos`,
-        '🎉 ¡Excelente!',
-        {
-          metadata: { source: 'gamification', points },
-          ...options
-        }
-      )
-    } else {
-      return warning(
-        'Respuesta incorrecta. ¡Sigue intentándolo!',
-        '💭 Inténtalo de nuevo',
-        {
-          metadata: { source: 'gamification' },
-          ...options
-        }
-      )
-    }
-  }
-  
-  function storyGenerated(storyTitle, options = {}) {
-    return success(
-      `Tu historia "${storyTitle}" ha sido generada exitosamente`,
-      '📚 ¡Historia creada!',
-      {
-        actions: [
-          {
-            id: 'view',
-            label: 'Ver Historia',
-            icon: '👀',
-            style: 'primary'
-          }
-        ],
-        metadata: { source: 'story-generation' },
-        clickable: true,
-        ...options
-      }
-    )
-  }
-  
-  function levelUp(newLevel, options = {}) {
-    return success(
-      `¡Has alcanzado el nivel ${newLevel}!`,
-      '🆙 ¡Subiste de nivel!',
-      {
-        duration: 6000,
-        metadata: { source: 'gamification', level: newLevel },
-        ...options
-      }
-    )
-  }
-  
-  function apiError(endpoint, errorMessage, options = {}) {
-    return error(
-      `Error conectando con el servidor: ${errorMessage}`,
-      '🌐 Error de conexión',
-      {
-        metadata: { source: 'api', endpoint },
-        actions: [
-          {
-            id: 'retry',
-            label: 'Reintentar',
-            icon: '🔄',
-            style: 'secondary'
-          }
-        ],
-        ...options
-      }
-    )
-  }
-  
-  function studentJoined(studentName, options = {}) {
-    return info(
-      `${studentName} se ha unido a tu clase`,
-      '👋 Nuevo estudiante',
-      {
-        metadata: { source: 'class-management' },
-        ...options
-      }
-    )
-  }
-  
-  function assignmentCompleted(studentName, assignmentTitle, options = {}) {
-    return success(
-      `${studentName} ha completado "${assignmentTitle}"`,
-      '📋 Actividad completada',
-      {
-        metadata: { source: 'assignments' },
-        actions: [
-          {
-            id: 'view-results',
-            label: 'Ver Resultados',
-            icon: '📊',
-            style: 'primary'
-          }
-        ],
-        ...options
-      }
-    )
-  }
-  
-  return {
-    toasts,
-    addToast,
-    removeToast,
-    clearAll,
-    clearByType,
-    
-    // Métodos básicos
-    success,
-    error,
-    warning,
-    info,
-    loading,
-    
-    // Métodos educativos específicos
-    questionAnswered,
-    storyGenerated,
-    levelUp,
-    apiError,
-    studentJoined,
-    assignmentCompleted
-  }
-})
-
-// ============================================================================
-// 🎨 COMPONENTE TOAST
-// ============================================================================
+import { computed } from 'vue'
+import { useToastStore } from '@/stores/toast'
 
 export default {
   name: 'ToastNotification',
   setup() {
     const toastStore = useToastStore()
     
-    // ============================================================================
-    // 🎯 MÉTODOS DEL COMPONENTE
-    // ============================================================================
+    const toasts = computed(() => toastStore.toasts)
     
     const getToastClass = (toast) => {
       const classes = [`toast-${toast.type}`]
-      
       if (toast.clickable) classes.push('toast-clickable')
       if (toast.persistent) classes.push('toast-persistent')
       if (toast.actions && toast.actions.length > 0) classes.push('toast-with-actions')
-      
       return classes
     }
     
@@ -463,13 +155,11 @@ export default {
     const handleAction = (action, toast) => {
       console.log(`🎯 Acción ejecutada: ${action.label}`)
       
-      // Emit custom event para que el componente padre maneje la acción
       const event = new CustomEvent('toast-action', {
         detail: { action, toast }
       })
       window.dispatchEvent(event)
       
-      // Auto-remove toast después de acción (a menos que sea persistente)
       if (!toast.persistent) {
         setTimeout(() => {
           toastStore.removeToast(toast.id)
@@ -482,7 +172,7 @@ export default {
     }
     
     return {
-      toasts: toastStore.toasts,
+      toasts,
       getToastClass,
       getIconClass,
       getToastIcon,
