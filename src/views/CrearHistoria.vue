@@ -1,4 +1,3 @@
-<!-- views/CrearHistoria.vue - COMPLETO CON SISTEMA DE PREGUNTAS INTEGRADO -->
 <template>
   <div class="crear-historia">
     <div class="container">
@@ -26,7 +25,24 @@
                 <p>{{ tema.descripcion }}</p>
               </div>
             </div>
-            <div v-if="!formData.tema" class="error-message">
+            <!-- Input SOLO aparece cuando se selecciona la opción "Libre" -->
+            <div v-if="temaSeleccionadoEsLibre" class="tema-libre-input">
+              <input
+                  type="text"
+                  v-model="formData.tema_libre"
+                  placeholder="✍️ Escribe tu propio tema"
+                  class="tema-input"
+              />
+              <div v-if="mostrarErrorTemaLibre" class="error-message">
+                Por favor escribe el tema libre que deseas usar
+              </div>
+            </div>
+
+            <div v-else class="note-small">
+              (Si deseas un tema personalizado selecciona "Libre")
+            </div>
+
+            <div v-if="!temaFinalPresent" class="error-message" v-show="mostrarErrorGenerico">
               Por favor selecciona un tema
             </div>
           </div>
@@ -56,14 +72,17 @@
 
           <!-- Elementos especiales -->
           <div class="form-group">
-            <label for="elementos_especiales">✨ Elementos especiales (opcional):</label>
-            <textarea
-              id="elementos_especiales"
-              v-model="formData.elementos_especiales"
-              placeholder="¿Hay algo especial que quieras en tu historia? (animales mágicos, poderes, objetos especiales...)"
-              rows="3"
-              maxlength="200"
-            ></textarea>
+            <label>✨ Elementos especiales:</label>
+            <div class="elementos-input">
+              <input
+                  type="text"
+                  v-model="formData.elementos"
+                  placeholder="Escribe y presiona Enter"
+                  @keyup.enter.prevent="agregarElemento"
+                  class="chips-input"
+              />
+              <small class="note-small">(Puedes escribir varios separados por coma)</small>
+            </div>
           </div>
 
           <!-- Botón de crear -->
@@ -231,7 +250,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import {ref, onMounted, computed, watch, nextTick} from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useHistoriasStore } from '../stores/historias'
@@ -247,263 +266,291 @@ export default {
     // Estado del componente - Formulario
     const formData = ref({
       tema: '',
+      tema_libre: '',
       nombre_protagonista: '',
       edad_protagonista: '',
-      elementos_especiales: ''
+      elementos: ''
     })
+
     const generando = ref(false)
     const error = ref(null)
 
-    // Estado del componente - Sistema de Preguntas
+
+
+    // Computed properties - Formulario
+    const profile = computed(() => authStore.profile)
+
+    // ===============================
+    // Estado Historia y Preguntas
+    // ===============================
+    const historiaGenerada = ref(null)
     const mostrarPreguntas = ref(false)
     const preguntaActual = ref(0)
     const respuestasUsuario = ref([])
     const puntosTotales = ref(0)
     const juegoCompletado = ref(false)
 
-    // Computed properties - Formulario
-    const profile = computed(() => authStore.profile)
-    const temas = computed(() => historiasStore.temas)
-    const historiaGenerada = computed(() => historiasStore.historiaActual)
-    
-    const edadesDisponibles = computed(() => {
-      const edades = []
-      for (let i = 5; i <= 15; i++) {
-        edades.push(i)
+    const mostrarErrorGenerico = ref(false)
+    const mostrarErrorTemaLibre = ref(false)
+
+    // ===============================
+    // Temas Predeterminados
+    // ===============================
+    const temas = ref([
+      { id: "aventura", nombre: "Aventura", descripcion: "Explora mundos desconocidos", icono: "🗺️" },
+      { id: "fantasia", nombre: "Fantasía", descripcion: "Magia y criaturas míticas", icono: "🪄" },
+      { id: "ciencia", nombre: "Ciencia", descripcion: "Explora la ciencia y el futuro", icono: "🔬" },
+      { id: "libre", nombre: "Libre", descripcion: "Escribe tu propio tema", icono: "✍️" }
+    ])
+
+    const edadesDisponibles = computed(() => Array.from({ length: 11 }, (_, i) => i + 5))
+
+    // ===============================
+    // Métodos del Formulario
+    // ===============================
+
+    const temaSeleccionadoEsLibre = computed(() => formData.value.tema === 'libre')
+
+    const temaFinalPresent = computed(() => {
+      if (temaSeleccionadoEsLibre.value) {
+        return formData.value.tema_libre && formData.value.tema_libre.trim().length > 0
       }
-      return edades
+      return formData.value.tema && formData.value.tema.trim().length > 0
     })
 
-    // Computed properties - Sistema de Preguntas
-    const preguntas = computed(() => historiasStore.preguntas)
-    const preguntaEnCurso = computed(() => preguntas.value[preguntaActual.value])
-    const totalPreguntas = computed(() => preguntas.value.length)
-    const progresoPorcentaje = computed(() => 
-      totalPreguntas.value > 0 ? (preguntaActual.value / totalPreguntas.value) * 100 : 0
-    )
 
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-    
-    onMounted(async () => {
-      console.log('🎨 Iniciando CrearHistoria...')
-      
-      // Verificar autenticación
-      if (!authStore.isAuthenticated || !authStore.isAlumno) {
-        console.error('❌ Acceso no autorizado')
-        router.push('/login')
-        return
+    // Seleccionar tema (recibe el objeto tema)
+    function seleccionarTema(tema) {
+      formData.value.tema = tema
+      // reset tema_libre cuando cambia selección
+      if (tema !== 'libre') {
+        formData.value.tema_libre = ''
       }
-
-      // Cargar temas desde el backend
-      await cargarTemas()
-
-      // Pre-llenar datos del perfil si están disponibles
-      if (profile.value) {
-        if (profile.value.edad) {
-          formData.value.edad_protagonista = profile.value.edad.toString()
-        }
-      }
-    })
-
-    // ============================================================================
-    // 🎯 MÉTODOS PRINCIPALES - FORMULARIO
-    // ============================================================================
-    
-    async function cargarTemas() {
-      try {
-        await historiasStore.cargarTemas()
-        console.log(`✅ ${temas.value.length} temas cargados`)
-      } catch (err) {
-        console.error('❌ Error cargando temas:', err)
-        error.value = 'No pudimos cargar los temas disponibles. Por favor intenta de nuevo.'
-      }
+      mostrarErrorGenerico.value = false
+      mostrarErrorTemaLibre.value = false
     }
 
-    function seleccionarTema(temaId) {
-      formData.value.tema = temaId
-      console.log('🎯 Tema seleccionado:', temaId)
+    // Normalizar preguntas que lleguen en distintos formatos
+    function mapQuestions(rawQuestions) {
+      if (!Array.isArray(rawQuestions)) return []
+      return rawQuestions.map((q, idx) => {
+        // varios formatos soportados
+        if (q.texto && q.alternativas) {
+          return {
+            id: idx,
+            pregunta: q.texto,
+            opciones: q.alternativas,
+            respuesta_correcta: q.respuesta_correcta ?? q.correct ?? 0,
+            explicacion: q.explicacion ?? q.explanation ?? '',
+            tipo: q.tipo ?? 'inferencial'
+          }
+        } else if (q.question && q.options) {
+          return {
+            id: idx,
+            pregunta: q.question,
+            opciones: q.options,
+            respuesta_correcta: q.answer ?? q.correct ?? 0,
+            explicacion: q.explanation ?? '',
+            tipo: q.type ?? 'inferencial'
+          }
+        } else if (q.question && q.alternatives) {
+          return {
+            id: idx,
+            pregunta: q.question,
+            opciones: q.alternatives,
+            respuesta_correcta: q.correct_index ?? 0,
+            explicacion: q.explanation ?? '',
+            tipo: 'inferencial'
+          }
+        } else {
+          // fallback: intentar convertir propiedades intuitivas
+          return {
+            id: idx,
+            pregunta: q.pregunta || q.question || q.text || 'Pregunta',
+            opciones: q.opciones || q.options || q.alternativas || [],
+            respuesta_correcta: q.respuesta_correcta ?? q.answer ?? 0,
+            explicacion: q.explicacion || q.explanation || '',
+            tipo: q.tipo || 'inferencial'
+          }
+        }
+      })
     }
 
     async function crearHistoria() {
-      // Validaciones
-      if (!formData.value.tema) {
-        error.value = 'Por favor selecciona un tema para tu historia'
-        return
-      }
-
-      // ✅ OBTENER USUARIO ACTUAL
-      let usuarioActual = authStore.user || authStore.profile
-
-      // Si no tenemos usuario, intentar cargar desde localStorage
-      if (!usuarioActual?.id) {
-        try {
-          const userData = localStorage.getItem('user')
-          if (userData) {
-            const parsedUser = JSON.parse(userData)
-            if (parsedUser && parsedUser.id) {
-              usuarioActual = parsedUser
-            }
-          }
-        } catch (e) {
-          console.error('Error cargando desde localStorage:', e)
-        }
-      }
-
-      // ✅ VERIFICACIÓN FINAL DEL USUARIO
-      if (!usuarioActual?.id) {
-        error.value = 'No se pudo cargar la información del usuario. Por favor, inicia sesión nuevamente.'
-        return
-      }
-
-      // ✅ OBTENER ALUMNO_ID CORRECTO
-      let alumnoId = usuarioActual.alumno_id || authStore.profile?.id || usuarioActual.id
-
-      if (!alumnoId) {
-        error.value = 'No se pudo obtener el ID del alumno. Verifica tu perfil.'
-        return
-      }
-
-      generando.value = true
+      mostrarErrorGenerico.value = false
+      mostrarErrorTemaLibre.value = false
       error.value = null
 
-      try {
-        console.log('🚀 Generando historia...')
+      if (!formData.value.tema) {
+        mostrarErrorGenerico.value = true
+        error.value = 'Por favor selecciona un tema'
+        return
+      }
+      if (temaSeleccionadoEsLibre.value && (!formData.value.tema_libre || !formData.value.tema_libre.trim())) {
+        mostrarErrorTemaLibre.value = true
+        error.value = 'Por favor escribe el tema libre'
+        return
+      }
 
-        // ✅ DATOS EN FORMATO EXACTO QUE ESPERA EL BACKEND
-        const datosHistoria = {
-          tema: formData.value.tema,
-          personaje_principal: formData.value.nombre_protagonista || 'Héroe',
-          edad_protagonista: parseInt(formData.value.edad_protagonista) || 8,
-          alumno_id: alumnoId
+      // usuario
+      const usuarioActual = authStore.user || authStore.profile
+      if (!usuarioActual?.id) {
+        error.value = 'No se pudo identificar al usuario. Inicia sesión.'
+        return
+      }
+      const alumnoId = usuarioActual.alumno_id || usuarioActual.id
+
+      console.log('this is user actul', usuarioActual)
+
+      generando.value = true
+
+      // preparar payload con varios nombres por compatibilidad
+      const temaFinal = temaSeleccionadoEsLibre.value ? formData.value.tema_libre.trim() : formData.value.tema
+
+      const payload = {
+        user_id: alumnoId,
+        topic: temaFinal,
+        elementos: formData.value.elementos,
+        nombre: formData.value.nombre_protagonista,
+        edad: formData.value.edad_protagonista,
+        grado: usuarioActual.student_profile.current_grade
+      }
+      console.log('this is payload: ', payload)
+      /*
+      try {
+        // Ajusta la ruta según tu apiService; aquí usamos '/stories/generate'
+        const resp = await apiService.post('/stories/generate', payload)
+        const data = resp.data
+
+        // Normalizar la respuesta para que el template siga usando "titulo", "contenido", "personajes"
+        const normalized = {
+          id: data.id,
+          titulo: data.title ?? data.titulo ?? data.name ?? 'Historia',
+          contenido: data.content ?? data.contenido ?? '',
+          tema: data.topic ?? data.tema ?? temaFinal,
+          question_answer: data.question_answer ?? data.questions ?? data.questionAnswer ?? '[]',
+          story_metadata: data.story_metadata ?? data.storyMetadata ?? '{}',
+          personajes: Array.isArray(data.characters) ? data.characters
+              : (typeof data.characters === 'string' ? tryParseJSON(data.characters) : (data.personajes ?? [])),
         }
 
-        // Generar historia usando el store
-        const historia = await historiasStore.generarHistoria(datosHistoria)
-        
-        console.log('✅ Historia generada exitosamente:', historia.titulo)
+        // parse preguntas y colocarlas en normalized.questions (array mapeado)
+        let rawQuestions = []
+        try {
+          const maybe = normalized.question_answer
+          rawQuestions = typeof maybe === 'string' ? tryParseJSON(maybe) : (Array.isArray(maybe) ? maybe : [])
+        } catch (e) { rawQuestions = [] }
+
+        normalized.questions = mapQuestions(rawQuestions)
+
+        // guardar en estado
+        historiaGenerada.value = {
+          ...normalized,
+          palabras: normalized.contenido ? normalized.contenido.split(/\s+/).length : 0
+        }
 
       } catch (err) {
-        console.error('❌ Error creando historia:', err)
-        
-        // ✅ MENSAJES DE ERROR ESPECÍFICOS
-        if (err.response?.status === 400) {
-          const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Datos inválidos'
-          error.value = `Error en los datos enviados: ${errorMsg}`
-        } else if (err.response?.status === 404) {
-          error.value = 'El servicio de generación de historias no está disponible'
-        } else if (err.response?.status === 500) {
-          error.value = 'Error interno del servidor. Intenta de nuevo en unos momentos.'
-        } else {
-          error.value = err.message || 'No pudimos crear tu historia. Por favor intenta de nuevo.'
-        }
+        console.error('Error generando historia:', err)
+        error.value = err.response?.data?.detail || err.response?.data?.message || 'Error al generar la historia'
       } finally {
         generando.value = false
+      }*/
+    }
+
+    function tryParseJSON(str) {
+      try {
+        return JSON.parse(str)
+      } catch {
+        return []
       }
     }
 
-    // ============================================================================
-    // 🎯 MÉTODOS PRINCIPALES - SISTEMA DE PREGUNTAS
-    // ============================================================================
+    // ===============================
+    // Preguntas
+    // ===============================
+    const preguntas = computed(() => historiaGenerada.value?.questions ?? [])
+    const preguntaEnCurso = computed(() => preguntas.value[preguntaActual.value])
+    const totalPreguntas = computed(() => preguntas.value.length)
+    const progresoPorcentaje = computed(() =>
+        totalPreguntas.value > 0 ? (preguntaActual.value / totalPreguntas.value) * 100 : 0
+    )
 
     function irAPreguntas() {
-      console.log('🎯 Iniciando preguntas...')
-      console.log('📋 Preguntas disponibles:', preguntas.value)
-      
-      if (preguntas.value && preguntas.value.length > 0) {
-        mostrarPreguntas.value = true
-        preguntaActual.value = 0
-        respuestasUsuario.value = []
-        puntosTotales.value = 0
-        juegoCompletado.value = false
-        console.log('✅ Sistema de preguntas iniciado')
-      } else {
-        console.error('❌ No hay preguntas disponibles')
-        error.value = 'No se pudieron cargar las preguntas'
+      if (preguntas.value.length === 0) {
+        error.value = 'No hay preguntas disponibles'
+        return
       }
+      mostrarPreguntas.value = true
+      preguntaActual.value = 0
+      respuestasUsuario.value = []
+      puntosTotales.value = 0
+      juegoCompletado.value = false
     }
 
-    async function responderPregunta(opcionSeleccionada) {
-      try {
-        if (!preguntaEnCurso.value) throw new Error("No hay pregunta en curso")
+    function responderPregunta(opcionSeleccionada) {
+      if (!preguntaEnCurso.value) return
+      const esCorrecta = opcionSeleccionada === preguntaEnCurso.value.respuesta_correcta
+      const puntosGanados = esCorrecta ? 20 : 0
 
-        // Determinar si la respuesta es correcta (local, sin backend)
-        const esCorrecta = opcionSeleccionada === preguntaEnCurso.value.respuesta_correcta
-        const puntosGanados = esCorrecta ? 20 : 0
+      respuestasUsuario.value.push({
+        pregunta_id: preguntaEnCurso.value.id,
+        opcion_elegida: opcionSeleccionada,
+        es_correcta: esCorrecta,
+        puntos_ganados: puntosGanados,
+        explicacion: preguntaEnCurso.value.explicacion || ''
+      })
 
-        // Guardar respuesta del usuario
-        respuestasUsuario.value.push({
-          pregunta_id: preguntaEnCurso.value.id,
-          opcion_elegida: opcionSeleccionada,
-          es_correcta: esCorrecta,
-          puntos_ganados: puntosGanados,
-          explicacion: preguntaEnCurso.value.explicacion || ''
-        })
+      if (esCorrecta) puntosTotales.value += puntosGanados
 
-        if (esCorrecta) {
-          puntosTotales.value += puntosGanados
+      setTimeout(() => {
+        if (preguntaActual.value < totalPreguntas.value - 1) {
+          preguntaActual.value++
+        } else {
+          completarJuego()
         }
-
-        // Avanzar a siguiente pregunta o completar
-        setTimeout(() => {
-          if (preguntaActual.value < totalPreguntas.value - 1) {
-            preguntaActual.value++
-          } else {
-            completarJuego()
-          }
-        }, 2000)
-      } catch (err) {
-        console.error('❌ Error respondiendo pregunta:', err)
-        error.value = 'Error procesando la respuesta: ' + err.message
-      }
+      }, 1200)
     }
 
     async function completarJuego() {
       juegoCompletado.value = true
-      console.log('🎉 Juego completado! Puntos totales:', puntosTotales.value)
-
+      // Guardar progreso -> tu endpoint POST /records?user_id=...
       try {
-        // Datos para guardar en la BD
+        const usuarioActual = authStore.user || authStore.profile
         const datosProgreso = {
-          alumno_id: authStore.profile?.id,
-          historia_id: historiaGenerada.value.id,
-          puntuacion: puntosTotales.value,
-          respuestas_correctas: respuestasUsuario.value.filter(r => r.es_correcta).length,
-          total_preguntas: totalPreguntas.value
+          story_id: historiaGenerada.value.id,
+          correct_answers: respuestasUsuario.value.filter(r => r.es_correcta).length,
+          total_questions: totalPreguntas.value,
+          points: puntosTotales.value
         }
-
-        console.log('📤 Guardando progreso:', datosProgreso)
-
-        // Llamar a la API (debes tener apiService o historiasStore configurado)
-        const response = await apiService.guardarProgreso(datosProgreso)
-
-        console.log('✅ Progreso guardado en backend:', response.data)
+        await apiService.post(`/records?user_id=${usuarioActual.id}`, datosProgreso)
       } catch (err) {
-        console.error('❌ Error guardando progreso:', err)
-        error.value = 'No se pudo guardar el progreso. Intenta más tarde.'
+        console.error('Error guardando progreso', err)
       }
     }
 
-    // ============================================================================
-    // 🧭 NAVEGACIÓN Y ACCIONES
-    // ============================================================================
+    // utilidad UI
+    function getParrafos(contenido) {
+      if (!contenido) return []
+      return contenido.split('\n').filter(p => p.trim())
+    }
+
+    function getTipoPreguntaLabel(tipo) {
+      const labels = {
+        'inferencial': '🤔 Inferencial',
+        'juicio_critico': '⚖️ Juicio Crítico',
+        'creativa': '💡 Creativa'
+      }
+      return labels[tipo] || tipo
+    }
 
     function crearOtraHistoria() {
-      // Limpiar estado completo
-      historiasStore.clearHistoriaActual()
+      historiaGenerada.value = null
       mostrarPreguntas.value = false
       juegoCompletado.value = false
       preguntaActual.value = 0
       respuestasUsuario.value = []
       puntosTotales.value = 0
-      
-      formData.value = {
-        tema: '',
-        nombre_protagonista: '',
-        edad_protagonista: formData.value.edad_protagonista, // Mantener edad
-        elementos_especiales: ''
-      }
+      formData.value = { tema: '', tema_libre: '', nombre_protagonista: '', edad_protagonista: '', elementos: ''}
       error.value = null
     }
 
@@ -513,8 +560,14 @@ export default {
 
     function clearError() {
       error.value = null
-      historiasStore.clearError()
     }
+
+    // Si el usuario no está autenticado, redirigir
+    onMounted(() => {
+      if (!authStore.isAuthenticated || !authStore.isAlumno) {
+        router.push('/login')
+      }
+    })
 
     // ============================================================================
     // 🔧 MÉTODOS AUXILIARES
@@ -525,26 +578,14 @@ export default {
       return tema ? tema.nombre : temaId
     }
 
-    function getParrafos(contenido) {
-      if (!contenido) return []
-      return contenido.split('\n').filter(p => p.trim())
-    }
 
-    function getTipoPreguntaLabel(tipo) {
-      const labels = {
-        'inferencial': '🤔 Inferencial',
-        'juicio_critico': '⚖️ Juicio Crítico', 
-        'creativa': '💡 Creativa'
-      }
-      return labels[tipo] || tipo
-    }
 
     return {
       // Estados - Formulario
       formData,
       generando,
       error,
-      
+
       // Estados - Preguntas
       mostrarPreguntas,
       preguntaActual,
@@ -579,7 +620,12 @@ export default {
       
       // Métodos - Navegación
       crearOtraHistoria,
-      verMisHistorias
+      verMisHistorias,
+
+      mostrarErrorGenerico,
+      temaFinalPresent,
+      mostrarErrorTemaLibre,
+      temaSeleccionadoEsLibre
     }
   }
 }
