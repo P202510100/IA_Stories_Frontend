@@ -108,7 +108,7 @@ export default {
         console.log('🔐 Iniciando proceso de login...')
         
         // Limpiar errores previos
-        authStore.error = null
+        authStore.clearError()
         
         
         const response = await authStore.login({
@@ -141,7 +141,7 @@ export default {
         router.push('/dashboard-docente')
       } else {
         console.error('❌ Tipo de usuario no reconocido:', userType)
-        authStore.error = 'Tipo de usuario no válido'
+        authStore.clearError()
       }
     }
 

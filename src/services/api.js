@@ -88,8 +88,7 @@ const apiService = {
 
   async updateUser(userId, userData) {
       console.log(userId, userData)
-    const response = await api.put('/auth/update-profile', {
-      user_id: userId,
+    const response = await api.put(`/users/${userId}`, {
       ...userData
     })
     return response.data
@@ -230,12 +229,6 @@ const apiService = {
         },
         timeout: 100000, // Aumentado para generación IA
     })
-  },
-  async actualizarPerfil(updateData) {
-      const response = await api.put(`/api/docentes/${updateData.user_id}/perfil`, {
-          ...updateData
-      })
-      return response.data
   },
   async guardarProgreso(recordId, respuestas) {
      return api.post(`/records/${recordId}/save-progress`, respuestas)

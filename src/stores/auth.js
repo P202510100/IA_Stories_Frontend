@@ -218,36 +218,6 @@ async function validateResetToken(token) {
     }
   }
 
-  // ✅ UPDATE PROFILE
-  async function updateProfile(userData) {
-    loading.value = true
-    error.value = null
-
-    try {
-      console.log('🔄 Actualizando perfil del usuario:', user.value.id)
-      
-      const response = await apiService.updateUser(user.value.id, userData)
-      
-      user.value = { 
-        ...user.value, 
-        ...userData,
-        id: response.user_id || user.value.id
-      }
-      
-      // ✅ USAR KEY CORRECTA 'user'
-      localStorage.setItem('user', JSON.stringify(user.value))
-      console.log('✅ Perfil actualizado exitosamente')
-      return response
-      
-    } catch (err) {
-      console.error('❌ Error actualizando perfil:', err)
-      error.value = err.response?.data?.error || 'Error actualizando perfil'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
   // ✅ DELETE ACCOUNT
   async function deleteAccount() {
     loading.value = true
@@ -342,25 +312,35 @@ async function validateResetToken(token) {
     }
   }
 
+  function updateProfile(updatedUser) {
+      user.value = updatedUser
+
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+
+      console.log('Perfil Actualizado correctamente', updatedUser)
+  }
+
+  function clearError() {
+      error.value = null
+  }
   return {
     // Estado
     user,
     loading,
     error,
-    
+    clearError,
     // Computed
     isAuthenticated,
     userType,
     isAlumno,
     isDocente,
     profile, // ← Agregado profile que tus componentes esperan
-    
+    updateProfile,
     // Métodos principales
     login,
     register,
     logout,
     forgotPassword,
-    updateProfile,
     deleteAccount,
     resetPassword,        
     validateResetToken,

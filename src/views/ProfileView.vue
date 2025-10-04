@@ -62,37 +62,65 @@
                 placeholder="tu@email.com"
               />
             </div>
-            
+
             <div v-if="isAlumno" class="input-group">
-              <label for="edad">🎂 Edad</label>
+              <label for="birth_date">🎂 Año de nacimiento</label>
               <input
-                id="edad"
-                v-model="formData.edad"
-                type="number"
-                min="6"
-                max="18"
-                placeholder="Tu edad en años"
+                  id="birth_date"
+                  v-model="formData.birth_date"
+                  type="date"
+                  required
               />
             </div>
-            
-            <div v-if="isDocente" class="input-group">
-              <label for="institucion">🏫 Institución</label>
+
+            <div v-if="isAlumno" class="input-group">
+              <label for="current_level">🎯 Grado actual</label>
               <input
-                id="institucion"
-                v-model="formData.institucion"
-                type="text"
-                placeholder="Nombre de tu institución educativa"
+                  id="current_level"
+                  v-model="formData.current_grade"
+                  type="text"
+                  placeholder="Escribe tu grado"
               />
             </div>
-            
+
             <div v-if="isDocente" class="input-group">
-              <label for="grado">📚 Grado/Nivel que enseñas</label>
-              <select id="grado" v-model="formData.grado">
-                <option value="">Selecciona un grado</option>
-                <option v-for="grado in gradosDisponibles" :key="grado.value" :value="grado.value">
-                  {{ grado.label }}
-                </option>
-              </select>
+              <label for="current_school">🏫 Institución</label>
+              <input
+                  id="current_school"
+                  v-model="formData.current_school"
+                  type="text"
+                  placeholder="Nombre de tu institución educativa"
+              />
+            </div>
+
+            <div v-if="isDocente" class="input-group">
+              <label for="alma_mater">🎓 Alma Mater</label>
+              <input
+                  id="alma_mater"
+                  v-model="formData.alma_mater"
+                  type="text"
+                  placeholder="Universidad donde estudiaste"
+              />
+            </div>
+
+            <div v-if="isDocente" class="input-group">
+              <label for="degree_level">📚 Nivel académico</label>
+              <input
+                  id="degree_level"
+                  v-model="formData.degree_level"
+                  type="text"
+                  placeholder="Licenciatura, Maestría, Doctorado..."
+              />
+            </div>
+
+            <div v-if="isDocente" class="input-group">
+              <label for="major">📖 Especialidad</label>
+              <input
+                  id="major"
+                  v-model="formData.major"
+                  type="text"
+                  placeholder="Tu campo de especialización"
+              />
             </div>
             
             <div class="form-actions">
@@ -109,26 +137,57 @@
           <!-- Vista de solo lectura -->
           <div v-else class="info-display">
             <div class="info-grid">
+              <!-- Nombre -->
               <div class="info-item">
                 <span class="info-label">👤 Nombre:</span>
-                <span class="info-value">{{ user?.nombre || 'No especificado' }}</span>
+                <span class="info-value">{{ user?.fullname || 'No especificado' }}</span>
               </div>
+
+              <!-- Email -->
               <div class="info-item">
                 <span class="info-label">📧 Email:</span>
                 <span class="info-value">{{ user?.email || 'No especificado' }}</span>
               </div>
-              <div v-if="isAlumno && profile?.edad" class="info-item">
-                <span class="info-label">🎂 Edad:</span>
-                <span class="info-value">{{ profile.edad }} años</span>
-              </div>
-              <div v-if="isDocente && profile?.institucion" class="info-item">
-                <span class="info-label">🏫 Institución:</span>
-                <span class="info-value">{{ profile.institucion }}</span>
-              </div>
-              <div v-if="isDocente && profile?.grado" class="info-item">
-                <span class="info-label">📚 Nivel:</span>
-                <span class="info-value">{{ getGradoLabel(profile.grado) }}</span>
-              </div>
+
+              <!-- Estudiante -->
+              <template v-if="isAlumno">
+                <div class="info-item">
+                  <span class="info-label">🎂 Año de nacimiento:</span>
+                  <span class="info-value">
+          {{ profile?.birth_date ? formatDate(profile.birth_date) : 'No especificado' }}
+        </span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">🎯 Nivel actual:</span>
+                  <span class="info-value">{{ profile?.current_level || 'No especificado' }}</span>
+                </div>
+                <div v-if="profile?.current_grade" class="info-item">
+                  <span class="info-label">📚 Grado:</span>
+                  <span class="info-value">{{ profile.current_grade }}</span>
+                </div>
+              </template>
+
+              <!-- Profesor -->
+              <template v-if="isDocente">
+                <div class="info-item">
+                  <span class="info-label">🏫 Institución:</span>
+                  <span class="info-value">{{ profile?.current_school || 'No especificado' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">🎓 Alma Mater:</span>
+                  <span class="info-value">{{ profile?.alma_mater || 'No especificado' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">📚 Nivel académico:</span>
+                  <span class="info-value">{{ profile?.degree_level || 'No especificado' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">📖 Especialidad:</span>
+                  <span class="info-value">{{ profile?.major || 'No especificado' }}</span>
+                </div>
+              </template>
+
+              <!-- Miembro desde -->
               <div class="info-item">
                 <span class="info-label">📅 Miembro desde:</span>
                 <span class="info-value">{{ formatDate(user?.created_at) }}</span>
@@ -448,6 +507,7 @@ export default {
       fullname: '',
       email: '',
       birth_date: null,
+      current_level: '',
       current_grade: '',
       interests: '',
       alma_mater: '',
@@ -646,31 +706,39 @@ export default {
         guardandoInfo.value = true
         error.value = ''
 
-        console.log('💾 Actualizando información personal...')
-
-        console.log("data user: ", user.value)
-
-        // Enviar datos al backend
-        const updateData = {
-          user_id: user.value.id,
-          nombre: formData.value.nombre,
-          email: formData.value.email,
-          edad: formData.value.edad,
-          institucion: formData.value.institucion,
-          grado: formData.value.grado
+        let updateData = {
+          activo: true,
+          fullname: formData.value.fullname,
+          email: formData.value.email
         }
-        console.log("updateData: ",updateData)
+
+        if (isAlumno.value) {
+          updateData.student_profile = {
+            birth_date: formData.value.birth_date,
+            current_grade: formData.value.current_grade
+          }
+        }
+
+        if (isDocente.value) {
+          updateData.teacher_profile = {
+            birth_date: formData.value.birth_date,
+            current_school: formData.value.current_school,
+            alma_mater: formData.value.alma_mater,
+            degree_level: formData.value.degree_level,
+            major: formData.value.major
+          }
+        }
+
+        console.log('Payload enviado:', updateData)
+
         const response = await apiService.updateUser(user.value.id, updateData)
 
-        // Actualizar datos en el store
-        await authStore.updateProfile(response.user, response.profile)
+        authStore.updateProfile(response)
 
-        // Actualizar datos locales
         formDataOriginal.value = { ...formData.value }
         editandoInfo.value = false
 
-        toastStore.success('Información actualizada correctamente')
-        console.log('✅ Información personal actualizada')
+        toastStore.success('Información actualizada correctamente', response)
         
       } catch (err) {
         console.error('❌ Error actualizando información:', err)
