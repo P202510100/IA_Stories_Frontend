@@ -1,4 +1,3 @@
-
 import axios from 'axios'
 
 const api = axios.create({
@@ -35,6 +34,11 @@ const apiService = {
         }
     })
     return response.data
+  },
+  async getStudentByStudentId(studentId) {
+      const response = await api.get(`/students/${studentId}`)
+
+      return response.data
   },
 
   async register(userData) {
@@ -123,119 +127,6 @@ const apiService = {
     return response.data
   },
 
-  async obtenerHistoria(historiaId) {
-    const response = await api.get(`/historias/${historiaId}`)
-    return response.data
-  },
-
-  async generarPromptsImagenes(historiaId, personajes, historiaContenido, tema) {
-    const response = await api.post('/historias/generar-prompts-imagenes', {
-      historia_id: historiaId,
-      personajes: personajes,
-      historia_contenido: historiaContenido,
-      tema: tema
-    })
-    return response.data
-  },
-
-  async generarImagenesPersonajes(historiaId, personajes, tema) {
-    const response = await api.post('/historias/generar-imagenes-personajes', {
-      historia_id: historiaId,
-      personajes: personajes,
-      tema: tema
-    })
-    return response.data
-  },
-
-  // ============================================================================
-  //  PREGUNTAS - ENDPOINTS EXACTOS
-  // ============================================================================
-  
-  async responderPregunta(datosRespuesta) {
-    console.log('🎯 DEBUGGING ENDPOINT responderPregunta')
-    console.log('📨 Datos recibidos:', datosRespuesta)
-    
-    //  FORMATO 1: Como dice la documentación
-    const formato1 = {
-      historia_id: datosRespuesta.historia_id,
-      alumno_id: datosRespuesta.alumno_id,
-      pregunta_id: datosRespuesta.pregunta_id,
-      respuesta: datosRespuesta.respuesta
-    }
-    
-    //  FORMATO 2: Con "respuestas" plural (según error del backend)
-    const formato2 = {
-      historia_id: datosRespuesta.historia_id,
-      alumno_id: datosRespuesta.alumno_id,
-      pregunta_id: datosRespuesta.pregunta_id,
-      respuestas: [datosRespuesta.respuesta]
-    }
-    
-    //  FORMATO 3: IDs como strings
-    const formato3 = {
-      historia_id: String(datosRespuesta.historia_id),
-      alumno_id: String(datosRespuesta.alumno_id),
-      pregunta_id: String(datosRespuesta.pregunta_id),
-      respuesta: datosRespuesta.respuesta
-    }
-    
-    console.log('Probando Formato 1 (documentación):', formato1)
-    try {
-      const response = await api.post('/api/preguntas/responder', formato1)
-      console.log(' Formato 1 funcionó!')
-      return response.data
-    } catch (error1) {
-      console.log(' Formato 1 falló:', error1.response?.data?.error)
-      
-      console.log(' Probando Formato 2 (respuestas plural):', formato2)
-      try {
-        const response = await api.post('/api/preguntas/responder', formato2)
-        console.log(' Formato 2 funcionó!')
-        return response.data
-      } catch (error2) {
-        console.log(' Formato 2 falló:', error2.response?.data?.error)
-        
-        console.log(' Probando Formato 3 (IDs como strings):', formato3)
-        try {
-          const response = await api.post('/api/preguntas/responder', formato3)
-          console.log('✅ Formato 3 funcionó!')
-          return response.data
-        } catch (error3) {
-          console.log(' Formato 3 falló:', error3.response?.data?.error)
-          console.error(' TODOS LOS FORMATOS FALLARON')
-          throw error1 // Lanzar el primer error
-        }
-      }
-    }
-  },
-
-  // ============================================================================
-  //  ALUMNO - ENDPOINTS 
-  // ============================================================================
-    async obtenerAlumnos() {
-        const response = await api.get('/students/') // 👈 asegúrate que tu backend exponga esta ruta
-        return response.data
-    },
-
-
-
-    async obtenerHistorialAlumno(alumnoId) {
-    const response = await api.get(`/api/alumnos/${alumnoId}/historial`)
-    return response.data
-  },
-
-  async obtenerProgresoAlumno(alumnoId) {
-    const response = await api.get(`/api/progress/${alumnoId}`)
-    return response.data
-  },
-
-  async exportarHistorialPDF(alumnoId) {
-    const response = await api.get(`/historias/exportar-historial-pdf/${alumnoId}`, {
-      responseType: 'blob'
-    })
-    return response
-  },
-
   // ============================================================================
   //  DOCENTE - ENDPOINTS EXACTOS 
   // ============================================================================
@@ -243,29 +134,6 @@ const apiService = {
   async obtenerEstudiantesDocente(teacherId) {
       const response = await api.get(`/enrollments/teacher/${teacherId}/students`)
       return response.data
-  },
-
-  async obtenerAnalyticsDocente(docenteId) {
-    try {
-      const response = await api.get(`/api/docentes/${docenteId}/analytics`)
-      return response.data
-    } catch (error) {
-      console.warn('⚠️ Endpoint analytics no disponible, usando datos demo')
-      return {
-        analytics: {
-          resumen_general: {
-            total_estudiantes: 3,
-            total_historias: 8,
-            promedio_puntuacion: 85.5
-          },
-          distribucion_temas: {
-            fantasia: 3,
-            espacio: 2,
-            aventura: 3
-          }
-        }
-      }
-    }
   },
 
   async guardarRespuesta(recordId, payload) {
@@ -284,10 +152,6 @@ const apiService = {
       const response = await api.post(`/records/`, payload)
 
       return response.data
-  },
-  //  ALIAS para compatibilidad con DashboardDocente.vue
-  async obtenerEstadisticasDocente(docenteId) {
-    return this.obtenerAnalyticsDocente(docenteId)
   },
 
   async obtenerRankingEstudiantes(docenteId) {
@@ -359,8 +223,13 @@ const apiService = {
   // ============================================================================
   
   async healthCheck() {
-    const response = await api.get('/health')
-    return response.data
+      return await axios.get({
+        baseURL: 'http://localhost:8000/',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        timeout: 100000, // Aumentado para generación IA
+    })
   },
   async actualizarPerfil(updateData) {
       const response = await api.put(`/api/docentes/${updateData.user_id}/perfil`, {
