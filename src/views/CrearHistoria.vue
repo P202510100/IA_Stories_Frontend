@@ -253,7 +253,6 @@
 import {ref, onMounted, computed, watch, nextTick} from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useHistoriasStore } from '../stores/historias'
 import apiService from "@/services/api.js";
 
 export default {
@@ -261,8 +260,7 @@ export default {
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    const historiasStore = useHistoriasStore()
-    
+
     // Estado del componente - Formulario
     const formData = ref({
       tema: '',
@@ -334,44 +332,16 @@ export default {
     function mapQuestions(rawQuestions) {
       if (!Array.isArray(rawQuestions)) return []
       return rawQuestions.map((q, idx) => {
-        // varios formatos soportados
-        if (q.texto && q.alternativas) {
-          return {
-            id: idx,
-            pregunta: q.texto,
-            opciones: q.alternativas,
-            respuesta_correcta: q.respuesta_correcta ?? q.correct ?? 0,
-            explicacion: q.explicacion ?? q.explanation ?? '',
-            tipo: q.tipo ?? 'inferencial'
-          }
-        } else if (q.question && q.options) {
-          return {
-            id: idx,
-            pregunta: q.question,
-            opciones: q.options,
-            respuesta_correcta: q.answer ?? q.correct ?? 0,
-            explicacion: q.explanation ?? '',
-            tipo: q.type ?? 'inferencial'
-          }
-        } else if (q.question && q.alternatives) {
-          return {
-            id: idx,
-            pregunta: q.question,
-            opciones: q.alternatives,
-            respuesta_correcta: q.correct_index ?? 0,
-            explicacion: q.explanation ?? '',
-            tipo: 'inferencial'
-          }
-        } else {
-          // fallback: intentar convertir propiedades intuitivas
-          return {
-            id: idx,
-            pregunta: q.pregunta || q.question || q.text || 'Pregunta',
-            opciones: q.opciones || q.options || q.alternativas || [],
-            respuesta_correcta: q.respuesta_correcta ?? q.answer ?? 0,
-            explicacion: q.explicacion || q.explanation || '',
-            tipo: q.tipo || 'inferencial'
-          }
+        const opciones = q.opciones || q.options || q.alternativas || []
+        const respuestaCorrecta = q.respuesta_correcta ?? q.answer ?? q.correct ?? q.correct_index ?? 0
+
+        return {
+          id: idx,  // 👈 0-based siempre
+          pregunta: q.pregunta || q.question || q.texto || q.text || 'Pregunta',
+          opciones: opciones,
+          respuesta_correcta: typeof respuestaCorrecta === 'number' ? respuestaCorrecta : 0,
+          explicacion: q.explicacion || q.explanation || '',
+          tipo: q.tipo || q.type || 'inferencial'
         }
       })
     }
@@ -416,30 +386,32 @@ export default {
         grado: usuarioActual.student_profile.current_grade
       }
       console.log('this is payload: ', payload)
-      /*
       try {
         // Ajusta la ruta según tu apiService; aquí usamos '/stories/generate'
-        const resp = await apiService.post('/stories/generate', payload)
-        const data = resp.data
+        const data = await apiService.generarHistoria(payload)
 
+        console.log("story data: ", data)
         // Normalizar la respuesta para que el template siga usando "titulo", "contenido", "personajes"
         const normalized = {
-          id: data.id,
-          titulo: data.title ?? data.titulo ?? data.name ?? 'Historia',
-          contenido: data.content ?? data.contenido ?? '',
-          tema: data.topic ?? data.tema ?? temaFinal,
-          question_answer: data.question_answer ?? data.questions ?? data.questionAnswer ?? '[]',
-          story_metadata: data.story_metadata ?? data.storyMetadata ?? '{}',
-          personajes: Array.isArray(data.characters) ? data.characters
-              : (typeof data.characters === 'string' ? tryParseJSON(data.characters) : (data.personajes ?? [])),
+          titulo: data.title,
+          contenido: data.content,
+          tema: data.topic,
+          question_answer: data.question_answer,
+          story_metadata: data.story_metadata,
+          personajes: Array.isArray(data.characters) ? data.characters : tryParseJSON(data.characters),
+          record_id: data.record_id,
+          created_at: data.created_at
         }
 
         // parse preguntas y colocarlas en normalized.questions (array mapeado)
         let rawQuestions = []
         try {
-          const maybe = normalized.question_answer
-          rawQuestions = typeof maybe === 'string' ? tryParseJSON(maybe) : (Array.isArray(maybe) ? maybe : [])
+          rawQuestions = typeof normalized.question_answer === 'string' ? tryParseJSON(normalized.question_answer) : normalized.question_answer
         } catch (e) { rawQuestions = [] }
+
+        if (!Array.isArray(rawQuestions)) {
+          rawQuestions = []
+        }
 
         normalized.questions = mapQuestions(rawQuestions)
 
@@ -454,8 +426,7 @@ export default {
         error.value = err.response?.data?.detail || err.response?.data?.message || 'Error al generar la historia'
       } finally {
         generando.value = false
-      }*/
-    }
+    }}
 
     function tryParseJSON(str) {
       try {
@@ -476,8 +447,9 @@ export default {
     )
 
     function irAPreguntas() {
-      if (preguntas.value.length === 0) {
+      if (!preguntas.value.length) {
         error.value = 'No hay preguntas disponibles'
+        console.warn("🚨 No se generaron preguntas para esta historia:", historiaGenerada.value)
         return
       }
       mostrarPreguntas.value = true
@@ -516,13 +488,20 @@ export default {
       // Guardar progreso -> tu endpoint POST /records?user_id=...
       try {
         const usuarioActual = authStore.user || authStore.profile
-        const datosProgreso = {
-          story_id: historiaGenerada.value.id,
-          correct_answers: respuestasUsuario.value.filter(r => r.es_correcta).length,
-          total_questions: totalPreguntas.value,
-          points: puntosTotales.value
+        // 1. Enviar todas las respuestas
+        const payload = respuestasUsuario.value.map(r => ({
+          question_index: r.pregunta_id,
+          response: String(r.opcion_elegida),
+          is_correct: r.es_correcta
+        }))
+        if (payload.length > 0) {
+          await apiService.guardarProgreso(historiaGenerada.value.record_id, payload)
         }
-        await apiService.post(`/records?user_id=${usuarioActual.id}`, datosProgreso)
+
+        await apiService.actualizarRecord(historiaGenerada.value.record_id, {
+          status: "COMPLETED"
+        })
+
       } catch (err) {
         console.error('Error guardando progreso', err)
       }

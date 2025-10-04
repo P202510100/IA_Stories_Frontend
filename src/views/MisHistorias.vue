@@ -2,7 +2,7 @@
 <template>
   <div class="mis-historias">
     <div class="container">
-      
+
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
@@ -31,7 +31,7 @@
               class="search-input"
             />
           </div>
-          
+
           <div class="filtro-tema">
             <select v-model="filtros.tema" class="filtro-select">
               <option value="">🎯 Todos los temas</option>
@@ -40,7 +40,7 @@
               </option>
             </select>
           </div>
-          
+
           <div class="filtro-orden">
             <select v-model="filtros.orden" class="filtro-select">
               <option value="reciente">📅 Más recientes</option>
@@ -98,7 +98,7 @@
           <div
             v-for="historia in historiasFiltradas"
             :key="historia.id"
-            @click="verHistoria(historia.id)"
+            @click="verHistoria(historia.recorId)"
             class="historia-card"
           >
             <!-- Header de la card -->
@@ -114,7 +114,7 @@
             <div class="card-content">
               <h3 class="historia-titulo">{{ historia.titulo }}</h3>
               <p class="historia-resumen">{{ getResumen(historia.contenido) }}</p>
-              
+
               <!-- Estadísticas de la historia -->
               <div class="historia-stats">
                 <div class="stat">
@@ -132,15 +132,15 @@
               </div>
 
               <!-- Progreso visual -->
-              <div v-if="historia.total_preguntas" class="progreso-container">
+              <div v-if="historia.total_preguntas > 0" class="progreso-container">
                 <div class="progreso-bar">
-                  <div 
-                    class="progreso-fill"
-                    :style="{ width: `${(historia.preguntas_completadas / historia.total_preguntas) * 100}%` }"
+                  <div
+                      class="progreso-fill"
+                      :style="{ width: getProgressWidth(historia) }"
                   ></div>
                 </div>
                 <span class="progreso-text">
-                  {{ Math.round((historia.preguntas_completadas / historia.total_preguntas) * 100) }}% completado
+                  {{ getProgressPercent(historia) }}% completado
                 </span>
               </div>
             </div>
@@ -160,20 +160,20 @@
 
         <!-- Paginación si hay muchas historias -->
         <div v-if="totalPaginas > 1" class="paginacion">
-          <button 
-            @click="cambiarPagina(paginaActual - 1)" 
+          <button
+            @click="cambiarPagina(paginaActual - 1)"
             :disabled="paginaActual === 1"
             class="btn-pagina"
           >
             ← Anterior
           </button>
-          
+
           <span class="pagina-info">
             Página {{ paginaActual }} de {{ totalPaginas }}
           </span>
-          
-          <button 
-            @click="cambiarPagina(paginaActual + 1)" 
+
+          <button
+            @click="cambiarPagina(paginaActual + 1)"
             :disabled="paginaActual === totalPaginas"
             class="btn-pagina"
           >
@@ -210,53 +210,61 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useHistoriasStore } from '../stores/historias'
+import api from "@/services/api.js";
 
 export default {
   name: 'MisHistorias',
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    const historiasStore = useHistoriasStore()
-    
+
     // Estado del componente
     const loading = ref(true)
     const loadingExport = ref(false)
     const error = ref(null)
     const estadisticas = ref(null)
-    const temasDisponibles = ref([])
-    
+    const historias = ref([])
     // Filtros y paginación
     const filtros = ref({
       busqueda: '',
       tema: '',
       orden: 'reciente'
     })
-    
+
+    const temasDisponibles = ref([
+      { id: 'aventura', nombre: 'Aventura', icono: '🗺️' },
+      { id: 'fantasia', nombre: 'Fantasía', icono: '🧙‍♂️' },
+      { id: 'espacio', nombre: 'Espacio', icono: '🚀' },
+      { id: 'naturaleza', nombre: 'Naturaleza', icono: '🌿' },
+      { id: 'misterio', nombre: 'Misterio', icono: '🔍' },
+      { id: 'ciencia', nombre: 'Ciencia', icono: '🔬' },
+      { id: 'deportes', nombre: 'Deportes', icono: '⚽' },
+      { id: 'amistad', nombre: 'Amistad', icono: '👫' },
+    ])
+
     const paginaActual = ref(1)
     const historiasPorPagina = 9
 
     // Computed properties
     const profile = computed(() => authStore.profile)
-    const historias = computed(() => historiasStore.historias)
-    
+
     const historiasFiltradas = computed(() => {
       let resultado = [...historias.value]
-      
+
       // Filtrar por búsqueda
       if (filtros.value.busqueda) {
         const busqueda = filtros.value.busqueda.toLowerCase()
-        resultado = resultado.filter(h => 
+        resultado = resultado.filter(h =>
           h.titulo.toLowerCase().includes(busqueda) ||
           h.contenido.toLowerCase().includes(busqueda)
         )
       }
-      
+
       // Filtrar por tema
       if (filtros.value.tema) {
         resultado = resultado.filter(h => h.tema === filtros.value.tema)
       }
-      
+
       // Ordenar
       switch (filtros.value.orden) {
         case 'reciente':
@@ -272,37 +280,37 @@ export default {
           resultado.sort((a, b) => (b.puntos_obtenidos || 0) - (a.puntos_obtenidos || 0))
           break
       }
-      
+
       // Paginación
       const inicio = (paginaActual.value - 1) * historiasPorPagina
       const fin = inicio + historiasPorPagina
       return resultado.slice(inicio, fin)
     })
-    
+
     const totalPaginas = computed(() => {
       let total = historias.value.length
-      
+
       // Aplicar filtros para calcular total real
       if (filtros.value.busqueda || filtros.value.tema) {
         const filtrados = historias.value.filter(h => {
-          const matchBusqueda = !filtros.value.busqueda || 
+          const matchBusqueda = !filtros.value.busqueda ||
             h.titulo.toLowerCase().includes(filtros.value.busqueda.toLowerCase())
           const matchTema = !filtros.value.tema || h.tema === filtros.value.tema
           return matchBusqueda && matchTema
         })
         total = filtrados.length
       }
-      
+
       return Math.ceil(total / historiasPorPagina)
     })
 
     // ============================================================================
     // 🚀 LIFECYCLE
     // ============================================================================
-    
+
     onMounted(async () => {
       console.log('📚 Iniciando MisHistorias...')
-      
+
       // Verificar autenticación
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         console.error('❌ Acceso no autorizado')
@@ -321,7 +329,7 @@ export default {
     // ============================================================================
     // 🔄 CARGA DE DATOS - SOLO BACKEND REAL
     // ============================================================================
-    
+
     async function cargarDatos() {
       loading.value = true
       error.value = null
@@ -334,12 +342,29 @@ export default {
         console.log('📊 Cargando historias y estadísticas...')
 
         // Cargar historias
-        await historiasStore.cargarHistoriasAlumno(profile.id)
-        
+
+        const response = await api.cargarHistoriasPorAlumno(profile.value.id);
+
+        console.log('this is response from cargarhistoriasporalumno: ', response)
+
+        historias.value = response.map(record => ({
+          id: record.story.id,
+          titulo: record.story.title,
+          contenido: record.story.content,
+          tema: record.story.topic,
+          created_at: record.story.created_at,
+          preguntas_completas: record.correct_answers,
+          total_preguntas: record.total_questions,
+          puntos_obtenidos: record.points,
+          status: record.status,
+          palabras: record.story.content ? record.story.content.split(' ').length : 0,
+          recorId: record.id
+        }))
+
+        console.log('this is response from historiasgeneradas: ', historias)
+
         // Cargar temas disponibles
-        await historiasStore.cargarTemas()
-        temasDisponibles.value = historiasStore.temas
-        
+
         // Cargar estadísticas
         await cargarEstadisticas()
 
@@ -355,10 +380,19 @@ export default {
 
     async function cargarEstadisticas() {
       try {
-        estadisticas.value = await historiasStore.cargarEstadisticasAlumno(profile.value.id)
+        const totalHistorias = historias.value.length
+        const puntosTotales = historias.value.reduce((sum, h) => sum + (h.puntos_obtenidos || 0), 0)
+        const totalPreguntas = historias.value.reduce((sum, h) => sum + (h.total_preguntas || 0), 0)
+        const totalCorrectas = historias.value.reduce((sum, h) => sum + (h.preguntas_completadas || 0), 0)
+
+        estadisticas.value = {
+          total_historias: totalHistorias,
+          puntos_totales: puntosTotales,
+          promedio_respuestas: totalPreguntas > 0 ? (totalCorrectas / totalPreguntas) * 100 : 0,
+          nivel_actual: { nombre: 'Principiante' } // luego puedes calcular niveles
+        }
       } catch (err) {
         console.error('❌ Error cargando estadísticas:', err)
-        // No lanzar error, continuar sin estadísticas
         estadisticas.value = {
           total_historias: historias.value.length,
           puntos_totales: 0,
@@ -375,15 +409,14 @@ export default {
     // ============================================================================
     // 📄 EXPORTACIÓN - SOLO BACKEND REAL
     // ============================================================================
-    
+
     async function exportarHistorial() {
       loadingExport.value = true
 
       try {
         console.log('📄 Exportando historial a PDF...')
-        
-        await historiasStore.exportarHistorialPDF(profile.value.id)
-        
+
+
         console.log('✅ PDF exportado exitosamente')
 
       } catch (err) {
@@ -397,13 +430,13 @@ export default {
     // ============================================================================
     // 🧭 NAVEGACIÓN Y ACCIONES
     // ============================================================================
-    
+
     function irACrearHistoria() {
       router.push('/crear-historia')
     }
 
-    function verHistoria(historiaId) {
-      router.push(`/historia/${historiaId}`)
+    function verHistoria(recordId) {
+      router.push(`/historia/${recordId}`)
     }
 
     function cambiarPagina(nuevaPagina) {
@@ -432,66 +465,72 @@ export default {
     // ============================================================================
     // 🔧 MÉTODOS AUXILIARES
     // ============================================================================
-    
+
     function getEmojiTema(tema) {
-      const emojis = {
-        'aventura': '🗺️',
-        'fantasia': '🧙‍♂️',
-        'espacio': '🚀',
-        'naturaleza': '🌿',
-        'misterio': '🔍',
-        'ciencia': '🔬',
-        'deportes': '⚽',
-        'amistad': '👫'
-      }
-      return emojis[tema] || '📚'
+      if (!tema) return '📚'
+      const key = tema.toString().toLowerCase()
+      const found = temasDisponibles.value.find(t => t.id.toLowerCase() === key)
+      return found ? found.icono : '📚'
     }
 
     function getTemaLabel(tema) {
-      const labels = {
-        'aventura': 'Aventura',
-        'fantasia': 'Fantasía',
-        'espacio': 'Espacio',
-        'naturaleza': 'Naturaleza',
-        'misterio': 'Misterio',
-        'ciencia': 'Ciencia',
-        'deportes': 'Deportes',
-        'amistad': 'Amistad'
-      }
-      return labels[tema] || tema
+      if (!tema) return 'Sin tema'
+      const key = tema.toString().toLowerCase()
+      const found = temasDisponibles.value.find(t => t.id.toLowerCase() === key)
+      return found ? found.nombre : tema
     }
 
     function getResumen(contenido) {
       if (!contenido) return 'Sin resumen disponible'
-      
+
       const palabras = contenido.split(' ')
       if (palabras.length <= 25) return contenido
-      
+
       return palabras.slice(0, 25).join(' ') + '...'
     }
 
     function formatDate(dateString) {
       if (!dateString) return ''
-      
-      try {
-        const date = new Date(dateString)
-        const now = new Date()
-        const diffTime = now - date
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-        
-        if (diffDays === 0) return 'Hoy'
-        if (diffDays === 1) return 'Ayer'
-        if (diffDays < 7) return `Hace ${diffDays} días`
-        
-        return date.toLocaleDateString('es-ES', { 
-          day: 'numeric', 
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return ''
+
+      const now = new Date()
+      const diffTime = now.getTime() - date.getTime()
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+      if (diffDays < 0) {
+        // fecha en el futuro: mostrar fecha exacta
+        return date.toLocaleDateString('es-ES', {
+          day: 'numeric',
           month: 'short',
           year: 'numeric'
         })
-      } catch (e) {
-        return ''
       }
+      if (diffDays === 0) return 'Hoy'
+      if (diffDays === 1) return 'Ayer'
+      if (diffDays < 7) return `Hace ${diffDays} días`
+
+      return date.toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })
     }
+    function getProgressPercent(historia) {
+      const done = Number(historia.preguntas_completadas ?? historia.preguntas_completas ?? 0)
+      const total = Number(historia.total_preguntas ?? 0)
+      if (!total || total <= 0) return 0
+      return Math.round((done / total) * 100)
+    }
+
+    function getProgressWidth(historia) {
+      return `${getProgressPercent(historia)}%`
+    }
+
+    function clearError() {
+      error.value = null
+    }
+
 
     return {
       // Estado
@@ -502,12 +541,13 @@ export default {
       temasDisponibles,
       filtros,
       paginaActual,
-      
+      getProgressWidth,
+      getProgressPercent,
       // Computed
       profile,
       historiasFiltradas,
       totalPaginas,
-      
+
       // Métodos
       recargarHistorias,
       exportarHistorial,

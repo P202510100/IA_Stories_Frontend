@@ -95,7 +95,7 @@
           </div>
         </div>
 
-        <!-- Historias recientes -->
+        <!-- Historias recientes
         <div v-if="historiasRecientes.length > 0" class="recent-section">
           <h2>📖 Tus Historias Recientes</h2>
           <div class="recent-grid">
@@ -122,9 +122,9 @@
             </div>
           </div>
         </div>
-
+        -->
         <!-- Estado vacío -->
-        <div v-else class="empty-state">
+        <div  class="empty-state">
           <div class="empty-icon">🌟</div>
           <h3>¡Comienza tu aventura!</h3>
           <p>Aún no has creado ninguna historia. ¡Es hora de comenzar!</p>
@@ -153,15 +153,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useHistoriasStore } from '../stores/historias'
 
 export default {
   name: 'DashboardAlumno',
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    const historiasStore = useHistoriasStore()
-    
+
     // Estado del componente
     const loading = ref(true)
     const error = ref(null)
@@ -170,9 +168,7 @@ export default {
     // Computed properties
     const profile = computed(() => authStore.profile)
     const user = computed(() => authStore.user)
-    const historiasRecientes = computed(() => {
-      return historiasStore.historiasRecientes?.slice(0, 6) || []
-    })
+
 
     // ============================================================================
     // 🚀 LIFECYCLE
@@ -180,7 +176,7 @@ export default {
     
     onMounted(async () => {
       console.log('🏠 Iniciando Dashboard Alumno...')
-      console.log('profile in dashbaordlaumno: ', profile._value.name)
+      console.log('profile in dashbaordlaumno: ', profile.value.fullname)
       // Verificar autenticación
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         console.error('❌ Acceso no autorizado')
@@ -257,24 +253,6 @@ export default {
     }
 
     
-// ✅ CARGAR HISTORIAS RECIENTES
-try {
-  if (typeof historiasStore.cargarHistoriasRecientes === 'function') {
-    await historiasStore.cargarHistoriasRecientes(usuarioActual.id)
-    console.log('✅ Historias recientes cargadas')
-  } else {
-    // Inicializar historias recientes como array vacío
-    historiasStore.historiasRecientes = []
-    console.log('📝 Función cargarHistoriasRecientes no implementada, usando array vacío')
-  }
-} catch (historiasError) {
-  console.warn('⚠️ Error cargando historias:', historiasError)
-  // No es crítico, continuar
-  historiasStore.historiasRecientes = []
-}
-
-    console.log('✅ Dashboard cargado exitosamente')
-    
   } catch (err) {
     console.error('❌ Error cargando dashboard:', err)
     error.value = err.message || 'Error cargando la información del dashboard'
@@ -293,32 +271,8 @@ try {
   }
 }
 
-    async function cargarEstadisticas() {
-      try {
-        console.log('📊 Cargando estadísticas del alumno...')
-        estadisticas.value = await historiasStore.cargarEstadisticasAlumno(profile.value.id)
-      } catch (err) {
-        console.error('❌ Error cargando estadísticas:', err)
-        // No lanzar error, usar datos por defecto
-        estadisticas.value = {
-          total_historias: 0,
-          puntos_totales: 0,
-          total_actividades: 0,
-          promedio_respuestas: 0,
-          nivel_actual: { nombre: 'Principiante' }
-        }
-      }
-    }
 
-    async function cargarHistoriasRecientes() {
-      try {
-        console.log('📚 Cargando historias recientes...')
-        await historiasStore.cargarHistoriasAlumno(profile.value.id)
-      } catch (err) {
-        console.error('❌ Error cargando historias:', err)
-        // No lanzar error, continuar sin historias
-      }
-    }
+
 
     async function recargarDatos() {
       await cargarDatosDashboard()
@@ -411,8 +365,7 @@ try {
       // Computed
       profile,
       user,
-      historiasRecientes,
-      
+
       // Métodos
       recargarDatos,
       irACrearHistoria,

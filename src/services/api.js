@@ -1,14 +1,12 @@
 
 import axios from 'axios'
 
-const API_URL = 'http://localhost:5000'
-
 const api = axios.create({
   baseURL: 'http://localhost:8000/api/v1',
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 10000, // Aumentado para generación IA
+  timeout: 100000, // Aumentado para generación IA
 })
 
 // Interceptor para manejar errores
@@ -109,8 +107,19 @@ const apiService = {
     return response.data
   },
 
+  async cargarHistoriasPorAlumno(studentId) {
+      const response = await api.get(`/records/student/${studentId}`)
+
+      return response.data;
+  },
+
+  async cargarHistoriaPorId(storyId) {
+      const response = await api.get(`/records/${storyId}`)
+      return response.data;
+  },
+
   async generarHistoria(datosHistoria) {
-    const response = await api.post('/historias/generar', datosHistoria)
+    const response = await api.post('/stories/generate', datosHistoria)
     return response.data
   },
 
@@ -259,6 +268,23 @@ const apiService = {
     }
   },
 
+  async guardarRespuesta(recordId, payload) {
+      const response = await api.post(`/records/${recordId}/answers`, payload)
+
+      return response.data
+  },
+
+  async actualizarRecord(recordId, payload) {
+      const response = await api.patch(`/records/${recordId}`, payload)
+
+      return response.data
+  },
+
+  async finalizarRecord(recordId, payload) {
+      const response = await api.post(`/records/`, payload)
+
+      return response.data
+  },
   //  ALIAS para compatibilidad con DashboardDocente.vue
   async obtenerEstadisticasDocente(docenteId) {
     return this.obtenerAnalyticsDocente(docenteId)
@@ -342,8 +368,8 @@ const apiService = {
       })
       return response.data
   },
-  async guardarProgreso(progreso) {
-     return api.post('/api/progress/save', progreso)
+  async guardarProgreso(recordId, respuestas) {
+     return api.post(`/records/${recordId}/save-progress`, respuestas)
   },
   async enrollStudentWithTeacher(teacherId, studentId) {
       return api.post(`/enrollments/`,{
