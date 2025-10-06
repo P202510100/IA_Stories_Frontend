@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
+  baseURL: 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json'
   },
@@ -28,7 +28,7 @@ const apiService = {
     params.append('password', credentials.password)
     params.append('grant_type', 'password')
 
-    const response = await api.post('/auth/login', params, {
+    const response = await api.post('/api/v1/auth/login', params, {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         }
@@ -36,18 +36,18 @@ const apiService = {
     return response.data
   },
   async getStudentByStudentId(studentId) {
-      const response = await api.get(`/students/${studentId}`)
+      const response = await api.get(`/api/v1/students/${studentId}`)
 
       return response.data
   },
 
   async register(userData) {
-    const response = await api.post('/auth/register', userData)
+    const response = await api.post('/api/v1/auth/register', userData)
     return response.data
   },
 
   async forgotPassword(email) {
-    const response = await api.post('/auth/forgot-password', { email })
+    const response = await api.post('/api/v1/auth/forgot-password', { email })
     return response.data
   },
 
@@ -55,7 +55,7 @@ const apiService = {
     try {
       console.log('📡 API: Restableciendo contraseña...')
       
-      const response = await api.post('/auth/reset-password', {
+      const response = await api.post('/api/v1/auth/reset-password', {
         token: token,
         new_password: newPassword
       })
@@ -73,7 +73,7 @@ const apiService = {
     try {
       console.log('📡 API: Validando token de reset...')
       
-      const response = await api.post('/auth/validate-reset-token', {
+      const response = await api.post('/api/v1/auth/validate-reset-token', {
         token: token
       })
       
@@ -88,14 +88,14 @@ const apiService = {
 
   async updateUser(userId, userData) {
       console.log(userId, userData)
-    const response = await api.put(`/users/${userId}`, {
+    const response = await api.put(`/api/v1/users/${userId}`, {
       ...userData
     })
     return response.data
   },
 
   async deleteUser(userId) {
-    const response = await api.delete('/auth/delete-account', {
+    const response = await api.delete('/api/v1/auth/delete-account', {
       data: { user_id: userId }
     })
     return response.data
@@ -105,24 +105,24 @@ const apiService = {
   //  HISTORIAS - ENDPOINTS 
   // ============================================================================
   
-  async obtenerTemas() {
-    const response = await api.get('/historias/temas')
-    return response.data
-  },
+ // async obtenerTemas() {
+  //  const response = await api.get('/historias/temas')
+  //  return response.data
+ // },
 
   async cargarHistoriasPorAlumno(studentId) {
-      const response = await api.get(`/records/student/${studentId}`)
+      const response = await api.get(`/api/v1/records/student/${studentId}`)
 
       return response.data;
   },
 
   async cargarHistoriaPorId(storyId) {
-      const response = await api.get(`/records/${storyId}`)
+      const response = await api.get(`/api/v1/records/${storyId}`)
       return response.data;
   },
 
   async generarHistoria(datosHistoria) {
-    const response = await api.post('/stories/generate', datosHistoria)
+    const response = await api.post('/api/v1/stories/generate', datosHistoria)
     return response.data
   },
 
@@ -131,24 +131,24 @@ const apiService = {
   // ============================================================================
   
   async obtenerEstudiantesDocente(teacherId) {
-      const response = await api.get(`/enrollments/teacher/${teacherId}/students`)
+      const response = await api.get(`/api/v1/enrollments/teacher/${teacherId}/students`)
       return response.data
   },
 
   async guardarRespuesta(recordId, payload) {
-      const response = await api.post(`/records/${recordId}/answers`, payload)
+      const response = await api.post(`/api/v1/records/${recordId}/answers`, payload)
 
       return response.data
   },
 
   async actualizarRecord(recordId, payload) {
-      const response = await api.patch(`/records/${recordId}`, payload)
+      const response = await api.patch(`/api/v1/records/${recordId}`, payload)
 
       return response.data
   },
 
   async finalizarRecord(recordId, payload) {
-      const response = await api.post(`/records/`, payload)
+      const response = await api.post(`/api/v1/records/`, payload)
 
       return response.data
   },
@@ -231,10 +231,10 @@ const apiService = {
     })
   },
   async guardarProgreso(recordId, respuestas) {
-     return api.post(`/records/${recordId}/save-progress`, respuestas)
+     return api.post(`/api/v1/records/${recordId}/save-progress`, respuestas)
   },
   async enrollStudentWithTeacher(teacherId, studentId) {
-      return api.post(`/enrollments/`,{
+      return api.post(`/api/v1/enrollments/`,{
           teacher_id: teacherId,
           student_id: studentId
       })

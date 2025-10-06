@@ -25,7 +25,18 @@
                 <p>{{ tema.descripcion }}</p>
               </div>
             </div>
-            <!-- Input SOLO aparece cuando se selecciona la opción "Libre" -->
+
+          <div class="tema-libre-container">
+              <button
+                type="button"
+                @click="seleccionarTema('libre')"
+                :class="['tema-libre-btn', { active: formData.tema === 'libre' }]"
+              >
+                ✍️ <strong>Tema Libre:</strong> Escribe tu propio tema
+              </button>
+            </div>
+
+
             <div v-if="temaSeleccionadoEsLibre" class="tema-libre-input">
               <input
                   type="text"
@@ -37,11 +48,6 @@
                 Por favor escribe el tema libre que deseas usar
               </div>
             </div>
-
-            <div v-else class="note-small">
-              (Si deseas un tema personalizado selecciona "Libre")
-            </div>
-
             <div v-if="!temaFinalPresent" class="error-message" v-show="mostrarErrorGenerico">
               Por favor selecciona un tema
             </div>
@@ -101,8 +107,13 @@
           <div class="loading-circle"></div>
           <div class="loading-circle"></div>
         </div>
-        <h3>🤖 La IA está creando tu historia...</h3>
-        <p>Esto puede tomar unos segundos</p>
+         <h3>🤖 La IA está creando tu historia...</h3>
+        <p class="tiempo-estimado">⏱️ Esto toma 15-25 segundos</p>
+        <div class="loading-steps">
+          <p class="step-completado">✓ Analizando tu perfil</p>
+          <p class="step-completado">✓ Diseñando estructura </p>
+          <p class="step-activo">⚙️ Apuntando las experiencias de los personajes...</p>
+        </div>
       </div>
 
       <!-- Historia generada -->
@@ -161,7 +172,8 @@
           
           <h3 class="pregunta-texto">{{ preguntaEnCurso.pregunta }}</h3>
           
-          <div class="opciones-grid">
+          <!-- Opciones múltiples (para inferencial y juicio crítico) -->
+          <div v-if="preguntaEnCurso.tipo !== 'creativa'" class="opciones-grid">
             <button
               v-for="(opcion, index) in preguntaEnCurso.opciones"
               :key="index"
@@ -178,8 +190,32 @@
             </button>
           </div>
 
-          <!-- Resultado de la respuesta -->
-          <div v-if="respuestasUsuario[preguntaActual]" class="resultado-respuesta">
+          <!-- Respuesta abierta (para preguntas creativas) -->
+          <div v-else class="respuesta-abierta">
+            <textarea
+              v-model="respuestaTextoLibre"
+              placeholder="Escribe tu respuesta aquí... (mínimo 20 palabras)"
+              class="textarea-creativa"
+              rows="5"
+              :disabled="respuestasUsuario[preguntaActual]"
+            ></textarea>
+            <button
+              v-if="!respuestasUsuario[preguntaActual]"
+              @click="responderPreguntaCreativa"
+              class="btn btn-primary"
+              :disabled="!respuestaTextoLibreValida"
+            >
+              Enviar Respuesta
+            </button>
+            <div v-if="respuestasUsuario[preguntaActual]" class="respuesta-enviada">
+              <div class="resultado-icon">✅</div>
+              <p><strong>Tu respuesta:</strong> {{ respuestasUsuario[preguntaActual].respuesta_texto }}</p>
+              <div class="puntos-ganados">+20 puntos por participar</div>
+            </div>
+          </div>
+
+          <!-- Resultado de la respuesta (solo para no creativas) -->
+          <div v-if="respuestasUsuario[preguntaActual] && preguntaEnCurso.tipo !== 'creativa'" class="resultado-respuesta">
             <div class="resultado-icon">
               {{ respuestasUsuario[preguntaActual].es_correcta ? '✅' : '❌' }}
             </div>
@@ -250,7 +286,7 @@
 </template>
 
 <script>
-import {ref, onMounted, computed, watch, nextTick} from 'vue'
+import {ref, onMounted, computed} from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import apiService from "@/services/api.js";
@@ -261,7 +297,6 @@ export default {
     const router = useRouter()
     const authStore = useAuthStore()
 
-    // Estado del componente - Formulario
     const formData = ref({
       tema: '',
       tema_libre: '',
@@ -272,43 +307,30 @@ export default {
 
     const generando = ref(false)
     const error = ref(null)
-
-
-
-    // Computed properties - Formulario
     const profile = computed(() => authStore.profile)
 
-    // ===============================
-    // Estado Historia y Preguntas
-    // ===============================
     const historiaGenerada = ref(null)
     const mostrarPreguntas = ref(false)
     const preguntaActual = ref(0)
     const respuestasUsuario = ref([])
     const puntosTotales = ref(0)
     const juegoCompletado = ref(false)
+    const respuestaTextoLibre = ref('')
 
     const mostrarErrorGenerico = ref(false)
     const mostrarErrorTemaLibre = ref(false)
 
-    // ===============================
-    // Temas Predeterminados
-    // ===============================
     const temas = ref([
       { id: "aventura", nombre: "Aventura", descripcion: "Explora mundos desconocidos", icono: "🗺️" },
       { id: "fantasia", nombre: "Fantasía", descripcion: "Magia y criaturas míticas", icono: "🪄" },
       { id: "ciencia", nombre: "Ciencia", descripcion: "Explora la ciencia y el futuro", icono: "🔬" },
-      { id: "libre", nombre: "Libre", descripcion: "Escribe tu propio tema", icono: "✍️" }
+      { id: "historia", nombre: "Historia", descripcion: "Viaja al pasado", icono: "🏛️" },
+      { id: "naturaleza", nombre: "Naturaleza", descripcion: "Animales y ecosistemas", icono: "🌿" },
+      { id: "misterio", nombre: "Misterio", descripcion: "Resuelve enigmas", icono: "🔍" },
     ])
 
     const edadesDisponibles = computed(() => Array.from({ length: 11 }, (_, i) => i + 5))
-
-    // ===============================
-    // Métodos del Formulario
-    // ===============================
-
     const temaSeleccionadoEsLibre = computed(() => formData.value.tema === 'libre')
-
     const temaFinalPresent = computed(() => {
       if (temaSeleccionadoEsLibre.value) {
         return formData.value.tema_libre && formData.value.tema_libre.trim().length > 0
@@ -316,11 +338,12 @@ export default {
       return formData.value.tema && formData.value.tema.trim().length > 0
     })
 
+    const respuestaTextoLibreValida = computed(() => {
+      return respuestaTextoLibre.value.trim().split(/\s+/).length >= 20
+    })
 
-    // Seleccionar tema (recibe el objeto tema)
     function seleccionarTema(tema) {
       formData.value.tema = tema
-      // reset tema_libre cuando cambia selección
       if (tema !== 'libre') {
         formData.value.tema_libre = ''
       }
@@ -328,7 +351,6 @@ export default {
       mostrarErrorTemaLibre.value = false
     }
 
-    // Normalizar preguntas que lleguen en distintos formatos
     function mapQuestions(rawQuestions) {
       if (!Array.isArray(rawQuestions)) return []
       return rawQuestions.map((q, idx) => {
@@ -336,7 +358,7 @@ export default {
         const respuestaCorrecta = q.respuesta_correcta ?? q.answer ?? q.correct ?? q.correct_index ?? 0
 
         return {
-          id: idx,  // 👈 0-based siempre
+          id: idx,
           pregunta: q.pregunta || q.question || q.texto || q.text || 'Pregunta',
           opciones: opciones,
           respuesta_correcta: typeof respuestaCorrecta === 'number' ? respuestaCorrecta : 0,
@@ -362,7 +384,6 @@ export default {
         return
       }
 
-      // usuario
       const usuarioActual = authStore.user || authStore.profile
       if (!usuarioActual?.id) {
         error.value = 'No se pudo identificar al usuario. Inicia sesión.'
@@ -370,11 +391,8 @@ export default {
       }
       const alumnoId = usuarioActual.alumno_id || usuarioActual.id
 
-      console.log('this is user actul', usuarioActual)
-
       generando.value = true
 
-      // preparar payload con varios nombres por compatibilidad
       const temaFinal = temaSeleccionadoEsLibre.value ? formData.value.tema_libre.trim() : formData.value.tema
 
       const payload = {
@@ -385,13 +403,10 @@ export default {
         edad: formData.value.edad_protagonista,
         grado: usuarioActual.student_profile.current_grade
       }
-      console.log('this is payload: ', payload)
+
       try {
-        // Ajusta la ruta según tu apiService; aquí usamos '/stories/generate'
         const data = await apiService.generarHistoria(payload)
 
-        console.log("story data: ", data)
-        // Normalizar la respuesta para que el template siga usando "titulo", "contenido", "personajes"
         const normalized = {
           titulo: data.title,
           contenido: data.content,
@@ -403,7 +418,6 @@ export default {
           created_at: data.created_at
         }
 
-        // parse preguntas y colocarlas en normalized.questions (array mapeado)
         let rawQuestions = []
         try {
           rawQuestions = typeof normalized.question_answer === 'string' ? tryParseJSON(normalized.question_answer) : normalized.question_answer
@@ -415,7 +429,6 @@ export default {
 
         normalized.questions = mapQuestions(rawQuestions)
 
-        // guardar en estado
         historiaGenerada.value = {
           ...normalized,
           palabras: normalized.contenido ? normalized.contenido.split(/\s+/).length : 0
@@ -426,7 +439,8 @@ export default {
         error.value = err.response?.data?.detail || err.response?.data?.message || 'Error al generar la historia'
       } finally {
         generando.value = false
-    }}
+      }
+    }
 
     function tryParseJSON(str) {
       try {
@@ -436,9 +450,6 @@ export default {
       }
     }
 
-    // ===============================
-    // Preguntas
-    // ===============================
     const preguntas = computed(() => historiaGenerada.value?.questions ?? [])
     const preguntaEnCurso = computed(() => preguntas.value[preguntaActual.value])
     const totalPreguntas = computed(() => preguntas.value.length)
@@ -449,7 +460,6 @@ export default {
     function irAPreguntas() {
       if (!preguntas.value.length) {
         error.value = 'No hay preguntas disponibles'
-        console.warn("🚨 No se generaron preguntas para esta historia:", historiaGenerada.value)
         return
       }
       mostrarPreguntas.value = true
@@ -483,15 +493,36 @@ export default {
       }, 1200)
     }
 
+    function responderPreguntaCreativa() {
+      if (!preguntaEnCurso.value) return
+      
+      respuestasUsuario.value.push({
+        pregunta_id: preguntaEnCurso.value.id,
+        opcion_elegida: null,
+        respuesta_texto: respuestaTextoLibre.value.trim(),
+        es_correcta: true,
+        puntos_ganados: 20,
+        explicacion: ''
+      })
+
+      puntosTotales.value += 20
+      respuestaTextoLibre.value = ''
+
+      setTimeout(() => {
+        if (preguntaActual.value < totalPreguntas.value - 1) {
+          preguntaActual.value++
+        } else {
+          completarJuego()
+        }
+      }, 1200)
+    }
+
     async function completarJuego() {
       juegoCompletado.value = true
-      // Guardar progreso -> tu endpoint POST /records?user_id=...
       try {
-        const usuarioActual = authStore.user || authStore.profile
-        // 1. Enviar todas las respuestas
         const payload = respuestasUsuario.value.map(r => ({
           question_index: r.pregunta_id,
-          response: String(r.opcion_elegida),
+          response: r.respuesta_texto || String(r.opcion_elegida),
           is_correct: r.es_correcta
         }))
         if (payload.length > 0) {
@@ -507,7 +538,6 @@ export default {
       }
     }
 
-    // utilidad UI
     function getParrafos(contenido) {
       if (!contenido) return []
       return contenido.split('\n').filter(p => p.trim())
@@ -529,6 +559,7 @@ export default {
       preguntaActual.value = 0
       respuestasUsuario.value = []
       puntosTotales.value = 0
+      respuestaTextoLibre.value = ''
       formData.value = { tema: '', tema_libre: '', nombre_protagonista: '', edad_protagonista: '', elementos: ''}
       error.value = null
     }
@@ -541,66 +572,48 @@ export default {
       error.value = null
     }
 
-    // Si el usuario no está autenticado, redirigir
     onMounted(() => {
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         router.push('/login')
       }
     })
-
-    // ============================================================================
-    // 🔧 MÉTODOS AUXILIARES
-    // ============================================================================
     
     function getTemaLabel(temaId) {
       const tema = temas.value.find(t => t.id === temaId)
       return tema ? tema.nombre : temaId
     }
 
-
-
     return {
-      // Estados - Formulario
       formData,
       generando,
       error,
-
-      // Estados - Preguntas
       mostrarPreguntas,
       preguntaActual,
       respuestasUsuario,
       puntosTotales,
       juegoCompletado,
-      
-      // Computed - Formulario
+      respuestaTextoLibre,
+      respuestaTextoLibreValida,
       profile,
       temas,
       historiaGenerada,
       edadesDisponibles,
-      
-      // Computed - Preguntas
       preguntas,
       preguntaEnCurso,
       totalPreguntas,
       progresoPorcentaje,
-      
-      // Métodos - Formulario
       seleccionarTema,
       crearHistoria,
       clearError,
       getTemaLabel,
       getParrafos,
-      
-      // Métodos - Preguntas
       irAPreguntas,
       responderPregunta,
+      responderPreguntaCreativa,
       completarJuego,
       getTipoPreguntaLabel,
-      
-      // Métodos - Navegación
       crearOtraHistoria,
       verMisHistorias,
-
       mostrarErrorGenerico,
       temaFinalPresent,
       mostrarErrorTemaLibre,
@@ -665,6 +678,41 @@ export default {
   margin-bottom: 10px;
 }
 
+.tema-libre-container {
+  margin-top: 15px;
+}
+
+.tema-libre-btn {
+  width: 100%;
+  padding: 15px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tema-libre-btn:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+}
+
+.tema-libre-btn.active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.tema-libre-input {
+  margin-top: 15px;
+}
 .tema-card {
   border: 2px solid #e0e0e0;
   border-radius: 15px;
@@ -939,6 +987,47 @@ export default {
   margin-bottom: 20px;
 }
 
+
+.respuesta-abierta {
+  margin-top: 20px;
+}
+
+.textarea-creativa {
+  width: 100%;
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 120px;
+  margin-bottom: 15px;
+}
+
+.textarea-creativa:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.textarea-creativa:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.respuesta-enviada {
+  background: #e8f5e8;
+  padding: 20px;
+  border-radius: 10px;
+  border: 2px solid #4caf50;
+  margin-top: 15px;
+}
+
+.respuesta-enviada p {
+  margin: 10px 0;
+  color: #333;
+}
+
 .tipo-badge {
   padding: 8px 16px;
   border-radius: 20px;
@@ -1191,6 +1280,49 @@ export default {
   
   .acciones-finales {
     flex-direction: column;
+  }
+}
+
+
+
+.tiempo-estimado {
+  color: #999;
+  font-size: 0.9rem;
+  margin: 10px 0 20px;
+}
+
+.loading-steps {
+  margin-top: 30px;
+  text-align: left;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.loading-steps p {
+  padding: 8px 15px;
+  margin: 8px 0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.step-completado {
+  color: #4caf50;
+  background: #e8f5e9;
+}
+
+.step-activo {
+  color: #667eea;
+  background: #e3f2fd;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
   }
 }
 </style>
