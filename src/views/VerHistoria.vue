@@ -1,4 +1,3 @@
-
 <template>
   <div class="ver-historia">
     <div class="container">
@@ -25,6 +24,11 @@
               <span class="fecha">{{ formatDate(historia.created_at) }}</span>
             </div>
           </div>
+        </div>
+
+        <!-- Imagen de la historia -->
+        <div v-if="historia.imagen" class="historia-imagen">
+          <img :src="`data:image/png;base64,${historia.imagen}`" alt="Imagen de la historia" />
         </div>
 
         <!-- Contenido de la historia -->
@@ -343,6 +347,7 @@ export default {
           tema: response.story?.topic || '',
           personajes: response.story?.characters || [],
           created_at: response.story.created_at,
+          imagen: response.story?.image_b64 || null
         }
 
         // 🔥 Mapear preguntas a la estructura que usa el frontend
@@ -971,5 +976,20 @@ export default {
   .felicitacion-actions {
     flex-direction: column;
   }
+  .historia-imagen img {
+    max-width: 100%;
+  }
+}
+.historia-imagen {
+  text-align: center;
+  margin: 20px 0;
+}
+
+.historia-imagen img {
+  max-width: 600px; /* limita a 600px en desktop */
+  width: 100%; /* ocupa 100% hasta ese límite */
+  height: auto; /* mantiene proporción */
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 </style>

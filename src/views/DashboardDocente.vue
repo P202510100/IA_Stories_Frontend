@@ -248,106 +248,112 @@ export default {
           throw new Error('No se encontró el perfil del docente')
         }
 
-        // Cargar estadísticas generales
-        try {
-          console.log('👥 Cargando estudiantes desde backend...')
-          const estudiantesResponse = await apiService.obtenerEstudiantesDocente(docenteId)
-          estudiantes.value = estudiantesResponse.estudiantes || []
-          
-          console.log(`✅ ${estudiantes.value.length} estudiantes reales cargados`)
-          
-          // Calcular estadísticas
-          estadisticas.value = {
-            total_estudiantes: estudiantes.value.length,
-            total_historias: estudiantes.value.reduce((sum, est) => sum + (est.total_historias || 0), 0),
-            total_actividades: estudiantes.value.reduce((sum, est) => sum + (est.actividades_completadas || 0), 0),
-            promedio_puntos: estudiantes.value.length > 0 
-              ? Math.round(estudiantes.value.reduce((sum, est) => sum + (est.puntos_totales || 0), 0) / estudiantes.value.length)
-              : 0
-          }
-          
-        } catch (err) {
-          console.error('❌ Error cargando estudiantes:', err)
-          
-          
-          estudiantes.value = []
-          estadisticas.value = {
-            total_estudiantes: 0,
-            total_historias: 0,
-            total_actividades: 0,
-            promedio_puntos: 0
-          }
-        }
+        // 1) Traer estudiantes del docente
+        const docenteId = profile.value.id
+        const resp = await apiService.obtenerEstudiantesDocente(docenteId)
+        console.log("repsonse: ", resp)
+        const raw = resp?.estudiantes ?? resp ?? []
 
-        // Cargar estudiantes
-        try {
-          console.log('this is profile: ', profile.value)
-          const estudiantesResponse = await apiService.obtenerEstudiantesDocente(profile.value.id)
-          console.log('this is estudianteResponse: ', estudiantesResponse)
-          estudiantes.value = (estudiantesResponse || []).filter(e => e.matriculado)
+        // 2) Normalizar estudiantes
+        estudiantes.value = raw.map(normalizarEstudiante)
+        console.log('this is stunde.value: ',estudiantes.value)
+        // 3) Estadísticas generales
+        estadisticas.value = calcularEstadisticas(estudiantes.value)
 
-          // Actualizar estadísticas con datos reales
-          estadisticas.value.total_estudiantes = estudiantes.value.length
-        } catch (err) {
-          console.error('Error cargando estudiantes:', err)
-          // Usar datos de demo
-          estudiantes.value = []
-          estadisticas.value.total_estudiantes = 0
-        }
+        // 4) Ranking (top 3)
+        rankingEstudiantes.value = calcularRanking(estudiantes.value, tipoRanking.value)
 
-        // Cargar ranking
-        try {
-          if (estudiantes.value.length > 0) {
-            rankingEstudiantes.value = [...estudiantes.value]
-              .filter(est => est.puntos_totales > 0)
-              .sort((a, b) => (b.puntos_totales || 0) - (a.puntos_totales || 0))
-              .slice(0, 5)
-          } else {
-            rankingEstudiantes.value = []
-          }
-        } catch (rankingError) {
-          console.error('❌ Error calculando ranking:', rankingError)
-          rankingEstudiantes.value = []
-        }
-
-        // Generar actividad reciente (demo)
-        actividadReciente.value = generarActividadDemo()
+        // 5) Actividad reciente (3 últimas historias creadas)
+        actividadReciente.value = construirActividadReciente(estudiantes.value)
 
       } catch (err) {
         console.error('❌ Error cargando datos del dashboard:', err)
         error.value = `Error al cargar los datos: ${err.message}`
+        estudiantes.value = []
+        estadisticas.value = { total_estudiantes: 0, total_historias: 0, total_actividades: 0, promedio_puntos: 0 }
+        rankingEstudiantes.value = []
+        actividadReciente.value = []
       } finally {
         loading.value = false
       }
     }
 
-    const generarActividadDemo = () => {
-      return [
-        {
-          id: 1,
-          estudiante_nombre: "Ana García",
-          tipo: "historia_completada",
-          descripcion: "Completó la historia 'Aventura Espacial'",
-          puntos: 85,
-          fecha: new Date(Date.now() - 3600000).toISOString()
-        },
-        {
-          id: 2,
-          estudiante_nombre: "Carlos Ruiz",
-          tipo: "actividad_completada",
-          descripcion: "Respondió correctamente 4/5 preguntas",
-          puntos: 80,
-          fecha: new Date(Date.now() - 7200000).toISOString()
-        },
-        {
-          id: 3,
-          estudiante_nombre: "María López",
-          tipo: "historia_creada",
-          descripcion: "Creó una nueva historia de fantasía",
-          puntos: 50,
-          fecha: new Date(Date.now() - 14400000).toISOString()
+    function normalizarEstudiante(s) {
+      const historiasArray = Array.isArray(s.historias) ? s.historias : []
+      const historiasNorm = historiasArray.map(h => ({
+        id: h.id || h.story_id,
+        title: h.title || h.story?.title || 'Sin título',
+        created_at: h.created_at || h.story?.created_at || h.fecha_creacion,
+        points: h.points ?? h.puntos ?? 0
+      }))
+
+      return {
+        id: s.id || s.user_id || s.alumno_id,
+        fullname: s.fullname || [s.nombre, s.apellido].filter(Boolean).join(' ') || 'Sin nombre',
+        email: s.email || '-',
+        current_level: s.current_level || s.nivel || 'Principiante',
+
+        // Métricas normalizadas:
+        total_points: s.total_points ?? s.puntos_totales ?? 0,
+        total_historias: s.total_historias ?? s.story_count ?? historiasNorm.length,
+        total_actividades: s.total_actividades ?? s.actividades_completadas ?? s.activities_count ?? 0,
+
+        // Historias normalizadas:
+        historias: historiasNorm
+      }
+    }
+
+    function calcularEstadisticas(lista) {
+      const total_estudiantes = lista.length
+      const total_historias = lista.reduce((acc, e) => acc + (e.total_historias || 0), 0)
+      const total_actividades = lista.reduce((acc, e) => acc + (e.total_actividades || 0), 0)
+      const suma_puntos = lista.reduce((acc, e) => acc + (e.total_points || 0), 0)
+      const promedio_puntos = total_estudiantes > 0 ? Math.round(suma_puntos / total_estudiantes) : 0
+
+      return {
+        total_estudiantes,
+        total_historias,
+        total_actividades,
+        promedio_puntos
+      }
+    }
+
+    function calcularRanking(lista, tipo) {
+      const getMetric = (e) => {
+        switch (tipo) {
+          case 'historias':   return e.total_historias || 0
+          case 'actividades': return e.total_actividades || 0
+          case 'puntos':
+          default:            return e.total_points || 0
         }
-      ]
+      }
+
+      return lista
+          .slice()
+          .sort((a, b) => getMetric(b) - getMetric(a))
+          .slice(0, 3)
+    }
+
+    function construirActividadReciente(lista) {
+      // Sin usar flatMap: aplanamos con reduce/forEach
+      const items = []
+      lista.forEach(est => {
+        (est.historias || []).forEach(hist => {
+          items.push({
+            id: `${est.id}-${hist.id}`,
+            estudiante_nombre: est.fullname,
+            tipo: 'historia_creada',
+            descripcion: `Creó la historia "${hist.title}"`,
+            puntos: hist.points || 0,
+            fecha: hist.created_at
+          })
+        })
+      })
+
+      return items
+          .filter(i => i.fecha) // solo con fecha válida
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+          .slice(0, 3)
     }
 
     const recargarEstudiantes = () => {
@@ -388,22 +394,28 @@ export default {
 
     const getRankingValue = (estudiante) => {
       switch (tipoRanking.value) {
+        case 'historias':   return `${estudiante.total_historias || 0} historias`
+        case 'actividades': return `${estudiante.total_actividades || 0} actividades`
         case 'puntos':
-          return `${estudiante.total_points || 0} puntos`
-        case 'historias':
-          return `${estudiante.total_historias || 0} historias`
-        case 'actividades':
-          return `${estudiante.total_actividades || 0} actividades`
-        default:
-          return `${estudiante.puntos_totales || 0} puntos`
+        default:            return `${estudiante.total_points || 0} puntos`
       }
     }
 
     const getRankingProgress = (estudiante, index) => {
+      const metric = (e) => {
+        switch (tipoRanking.value) {
+          case 'historias':   return e.total_historias || 0
+          case 'actividades': return e.total_actividades || 0
+          case 'puntos':
+          default:            return e.total_points || 0
+        }
+      }
+
       if (index === 0) return 100
-      const maxValue = rankingEstudiantes.value[0]?.total_points || 1
-      const currentValue = estudiante.total_points || 0
-      return Math.max(10, (currentValue / maxValue) * 100)
+      const maxValue = rankingEstudiantes.value.length ? metric(rankingEstudiantes.value[0]) : 1
+      const currentValue = metric(estudiante)
+      if (maxValue <= 0) return 10
+      return Math.max(10, Math.round((currentValue / maxValue) * 100))
     }
 
     const getActividadIcon = (tipo) => {

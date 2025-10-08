@@ -41,6 +41,12 @@ const apiService = {
       return response.data
   },
 
+  async unenrollStudent(teacherId, studentId) {
+      const response = await api.delete(`/enrollments/${teacherId}/${studentId}`)
+
+      return response.data
+  },
+
   async register(userData) {
     const response = await api.post('/auth/register', userData)
     return response.data

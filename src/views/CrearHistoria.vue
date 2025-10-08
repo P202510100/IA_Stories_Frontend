@@ -107,6 +107,10 @@
 
       <!-- Historia generada -->
       <div v-if="historiaGenerada && !mostrarPreguntas && !juegoCompletado" class="historia-resultado">
+        <div v-if="historiaGenerada.image_b64" class="historia-imagen">
+          <img :src="`data:image/png;base64,${historiaGenerada.image_b64}`" alt="Imagen de la historia" />
+        </div>
+
         <div class="historia-header">
           <h2>📖 {{ historiaGenerada.titulo }}</h2>
           <div class="historia-info">
@@ -178,6 +182,12 @@
             </button>
           </div>
 
+          <div class="acciones-progreso">
+            <button @click="guardarProgreso" class="btn btn-secondary">
+              💾 Guardar Progreso
+            </button>
+          </div>
+
           <!-- Resultado de la respuesta -->
           <div v-if="respuestasUsuario[preguntaActual]" class="resultado-respuesta">
             <div class="resultado-icon">
@@ -205,19 +215,17 @@
         </div>
 
         <div class="resultados-finales">
-          <div class="puntos-totales">
-            <span class="puntos-numero">{{ puntosTotales }}</span>
-            <span class="puntos-label">puntos ganados</span>
+          <!-- Nota principal -->
+          <div class="nota-final">
+            <span class="nota-numero">{{ puntosTotales }}</span>
+            <span class="nota-label">nota final / 20</span>
           </div>
-          
+
+          <!-- Estadísticas -->
           <div class="estadisticas">
             <div class="stat">
               <span class="stat-numero">{{ respuestasUsuario.filter(r => r.es_correcta).length }}</span>
-              <span class="stat-label">correctas</span>
-            </div>
-            <div class="stat">
-              <span class="stat-numero">{{ totalPreguntas }}</span>
-              <span class="stat-label">preguntas</span>
+              <span class="stat-label">correctas de {{ totalPreguntas }}</span>
             </div>
             <div class="stat">
               <span class="stat-numero">{{ Math.round((respuestasUsuario.filter(r => r.es_correcta).length / totalPreguntas) * 100) }}%</span>
@@ -400,7 +408,8 @@ export default {
           story_metadata: data.story_metadata,
           personajes: Array.isArray(data.characters) ? data.characters : tryParseJSON(data.characters),
           record_id: data.record_id,
-          created_at: data.created_at
+          created_at: data.created_at,
+          image_b64: data.image_b64
         }
 
         // parse preguntas y colocarlas en normalized.questions (array mapeado)
@@ -461,18 +470,15 @@ export default {
 
     function responderPregunta(opcionSeleccionada) {
       if (!preguntaEnCurso.value) return
+      if (!preguntaEnCurso.value) return
       const esCorrecta = opcionSeleccionada === preguntaEnCurso.value.respuesta_correcta
-      const puntosGanados = esCorrecta ? 20 : 0
 
       respuestasUsuario.value.push({
         pregunta_id: preguntaEnCurso.value.id,
         opcion_elegida: opcionSeleccionada,
         es_correcta: esCorrecta,
-        puntos_ganados: puntosGanados,
-        explicacion: preguntaEnCurso.value.explicacion || ''
+        puntos_ganados: esCorrecta ? 1 : 0 // sumamos cantidad de correctas
       })
-
-      if (esCorrecta) puntosTotales.value += puntosGanados
 
       setTimeout(() => {
         if (preguntaActual.value < totalPreguntas.value - 1) {
@@ -485,10 +491,15 @@ export default {
 
     async function completarJuego() {
       juegoCompletado.value = true
-      // Guardar progreso -> tu endpoint POST /records?user_id=...
+
+      const correctas = respuestasUsuario.value.filter(r => r.es_correcta).length
+      const total = totalPreguntas.value
+
+      // Cálculo automático de nota sobre 20
+      const nota = Math.round((correctas / total) * 20)
+      puntosTotales.value = nota
+
       try {
-        const usuarioActual = authStore.user || authStore.profile
-        // 1. Enviar todas las respuestas
         const payload = respuestasUsuario.value.map(r => ({
           question_index: r.pregunta_id,
           response: String(r.opcion_elegida),
@@ -499,11 +510,36 @@ export default {
         }
 
         await apiService.actualizarRecord(historiaGenerada.value.record_id, {
-          status: "COMPLETED"
+          status: "COMPLETED",
+          points: nota,
+          correct_answers: correctas,
+          total_questions: total
+        })
+      } catch (err) {
+        console.error('Error guardando progreso final', err)
+        }
+    }
+
+    async function guardarProgreso() {
+      try {
+        const payload = respuestasUsuario.value.map(r => ({
+          question_index: r.pregunta_id,
+          response: String(r.opcion_elegida),
+          is_correct: r.es_correcta
+        }))
+        if (payload.length > 0) {
+          await apiService.guardarProgreso(historiaGenerada.value.record_id, payload)
+        }
+
+        await apiService.actualizarRecord(historiaGenerada.value.record_id, {
+          status: "IN_PROGRESS",
+          total_questions: totalPreguntas.value
         })
 
+        alert("✅ Progreso guardado correctamente")
       } catch (err) {
-        console.error('Error guardando progreso', err)
+        console.error("❌ Error guardando progreso:", err)
+        alert("❌ No se pudo guardar el progreso")
       }
     }
 
@@ -596,7 +632,7 @@ export default {
       responderPregunta,
       completarJuego,
       getTipoPreguntaLabel,
-      
+      guardarProgreso,
       // Métodos - Navegación
       crearOtraHistoria,
       verMisHistorias,
@@ -611,6 +647,52 @@ export default {
 </script>
 
 <style scoped>
+
+.nota-final {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.nota-numero {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #4caf50; /* verde éxito */
+}
+
+.nota-label {
+  display: block;
+  font-size: 1rem;
+  color: #555;
+}
+
+.estadisticas {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-numero {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.historia-imagen {
+  text-align: center;
+  margin: 20px 0;
+}
+.historia-imagen img {
+  max-width: 600px;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
 .crear-historia {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
