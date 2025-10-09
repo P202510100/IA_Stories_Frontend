@@ -1,4 +1,3 @@
-
 <template>
   <div class="dashboard-alumno">
     <div class="container">
@@ -6,7 +5,7 @@
       <!-- Header con bienvenida -->
       <div class="welcome-header">
         <div class="welcome-content">
-          <h1>¡Hola, {{ profile?.nombre || 'Explorador' }}! 👋</h1>
+          <h1>¡Hola, {{ profile?.fullname || 'Explorador' }}! 👋</h1>
           <p>¿Listo para tu próxima aventura?</p>
         </div>
         <div class="level-badge" v-if="estadisticas">
@@ -95,7 +94,7 @@
           </div>
         </div>
 
-        <!-- Historias recientes -->
+        <!-- Historias recientes
         <div v-if="historiasRecientes.length > 0" class="recent-section">
           <h2>📖 Tus Historias Recientes</h2>
           <div class="recent-grid">
@@ -122,9 +121,9 @@
             </div>
           </div>
         </div>
-
+        -->
         <!-- Estado vacío -->
-        <div v-else class="empty-state">
+        <div  class="empty-state">
           <div class="empty-icon">🌟</div>
           <h3>¡Comienza tu aventura!</h3>
           <p>Aún no has creado ninguna historia. ¡Es hora de comenzar!</p>
@@ -153,15 +152,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useHistoriasStore } from '../stores/historias'
+import api from "@/services/api.js";
 
 export default {
   name: 'DashboardAlumno',
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    const historiasStore = useHistoriasStore()
-    
+
     // Estado del componente
     const loading = ref(true)
     const error = ref(null)
@@ -170,9 +168,7 @@ export default {
     // Computed properties
     const profile = computed(() => authStore.profile)
     const user = computed(() => authStore.user)
-    const historiasRecientes = computed(() => {
-      return historiasStore.historiasRecientes?.slice(0, 6) || []
-    })
+
 
     // ============================================================================
     // 🚀 LIFECYCLE
@@ -180,7 +176,7 @@ export default {
     
     onMounted(async () => {
       console.log('🏠 Iniciando Dashboard Alumno...')
-      
+      console.log('profile in dashbaordlaumno: ', profile.value.fullname)
       // Verificar autenticación
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         console.error('❌ Acceso no autorizado')
@@ -196,129 +192,55 @@ export default {
     // ============================================================================
     
     async function cargarDatosDashboard() {
-  loading.value = true
-  error.value = null
+        loading.value = true
+        error.value = null
 
-  try {
-    // ✅ OBTENER USUARIO DE FORMA MÁS ROBUSTA
-    let usuarioActual = profile.value || user.value || authStore.user
-
-    // Si no tenemos usuario, intentar cargar desde localStorage
-    if (!usuarioActual?.id) {
-      console.log('🔄 Usuario no encontrado en store, cargando desde localStorage...')
-      
-      try {
-        const userData = localStorage.getItem('user')
-        if (userData) {
-          const parsedUser = JSON.parse(userData)
-          if (parsedUser && parsedUser.id && parsedUser.tipo === 'alumno') {
-            usuarioActual = parsedUser
-            // ✅ Actualizar el store con los datos encontrados
-            authStore.user = parsedUser
-            console.log('✅ Usuario cargado desde localStorage:', parsedUser.nombre)
+        try {
+          const usuarioActual = profile.value || user.value || authStore.user
+          if (!usuarioActual?.id) {
+            throw new Error("No se pudo cargar la información del usuario. Inicia sesión nuevamente.")
           }
+
+          console.log("📊 Cargando estadísticas del alumno:", usuarioActual.id)
+
+          // Traer historias/records del backend
+          const records = await api.cargarHistoriasPorAlumno(usuarioActual.id)
+
+          const totalHistorias = records.length
+          const puntosTotales = records.reduce((sum, r) => sum + (r.points || 0), 0)
+
+          // respuestas correctas / total respondidas
+          const totalCorrectas = records.reduce((sum, r) => sum + (r.correct_answers || 0), 0)
+          const totalPreguntas = records.reduce((sum, r) => sum + (r.total_questions || 0), 0)
+
+          // 🔑 Aquí definimos "actividades" como la suma de todas las respondidas (correctas + incorrectas)
+          const totalRespondidas = records.reduce((sum, r) => {
+            const respondidas = r.status === "COMPLETED" ? (r.total_questions || 0) : (r.correct_answers || 0)
+            return sum + respondidas
+          }, 0)
+
+          const precision = totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0
+
+          estadisticas.value = {
+            total_historias: totalHistorias,
+            puntos_totales: puntosTotales,
+            total_actividades: totalRespondidas,
+            promedio_respuestas: precision,
+            nivel_actual: { nombre: "Principiante" } // luego puedes escalar niveles por puntos
+          }
+
+          console.log("✅ Estadísticas calculadas:", estadisticas.value)
+
+        } catch (err) {
+          console.error("❌ Error cargando dashboard:", err)
+          error.value = err.message || "Error cargando la información del dashboard"
+        } finally {
+          loading.value = false
         }
-      } catch (e) {
-        console.error('Error cargando desde localStorage:', e)
-      }
     }
 
-    
-    if (!usuarioActual?.id) {
-      throw new Error('No se pudo cargar la información del usuario. Por favor, inicia sesión nuevamente.')
-    }
 
-    console.log('📊 Cargando datos del dashboard para usuario:', usuarioActual.nombre)
 
-    // ✅ CARGAR DATOS (con datos simulados por ahora para evitar más errores)
-    try {
-      // Intentar cargar estadísticas reales si tienes el endpoint
-      // const stats = await apiService.obtenerEstadisticasAlumno(usuarioActual.id)
-      
-      // Por ahora, usar datos básicos para que funcione
-      estadisticas.value = {
-        historias_completadas: 0,
-        puntos_totales: 0,
-        respuestas_correctas: 0,
-        nivel_actual: 'Principiante',
-        ultimo_acceso: new Date().toISOString()
-      }
-      
-      console.log('✅ Estadísticas cargadas (datos básicos)')
-    } catch (statsError) {
-      console.warn('⚠️ Error cargando estadísticas:', statsError)
-      // Continuar con datos por defecto
-      estadisticas.value = {
-        historias_completadas: 0,
-        puntos_totales: 0,
-        respuestas_correctas: 0,
-        nivel_actual: 'Principiante'
-      }
-    }
-
-    
-// ✅ CARGAR HISTORIAS RECIENTES
-try {
-  if (typeof historiasStore.cargarHistoriasRecientes === 'function') {
-    await historiasStore.cargarHistoriasRecientes(usuarioActual.id)
-    console.log('✅ Historias recientes cargadas')
-  } else {
-    // Inicializar historias recientes como array vacío
-    historiasStore.historiasRecientes = []
-    console.log('📝 Función cargarHistoriasRecientes no implementada, usando array vacío')
-  }
-} catch (historiasError) {
-  console.warn('⚠️ Error cargando historias:', historiasError)
-  // No es crítico, continuar
-  historiasStore.historiasRecientes = []
-}
-
-    console.log('✅ Dashboard cargado exitosamente')
-    
-  } catch (err) {
-    console.error('❌ Error cargando dashboard:', err)
-    error.value = err.message || 'Error cargando la información del dashboard'
-    
-    // Si es un error de autenticación, ofrecer relogin
-    if (err.message.includes('inicia sesión')) {
-      setTimeout(() => {
-        if (confirm('¿Quieres ir al login para iniciar sesión nuevamente?')) {
-          authStore.logout()
-          router.push('/login')
-        }
-      }, 2000)
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-    async function cargarEstadisticas() {
-      try {
-        console.log('📊 Cargando estadísticas del alumno...')
-        estadisticas.value = await historiasStore.cargarEstadisticasAlumno(profile.value.id)
-      } catch (err) {
-        console.error('❌ Error cargando estadísticas:', err)
-        // No lanzar error, usar datos por defecto
-        estadisticas.value = {
-          total_historias: 0,
-          puntos_totales: 0,
-          total_actividades: 0,
-          promedio_respuestas: 0,
-          nivel_actual: { nombre: 'Principiante' }
-        }
-      }
-    }
-
-    async function cargarHistoriasRecientes() {
-      try {
-        console.log('📚 Cargando historias recientes...')
-        await historiasStore.cargarHistoriasAlumno(profile.value.id)
-      } catch (err) {
-        console.error('❌ Error cargando historias:', err)
-        // No lanzar error, continuar sin historias
-      }
-    }
 
     async function recargarDatos() {
       await cargarDatosDashboard()
@@ -411,8 +333,7 @@ try {
       // Computed
       profile,
       user,
-      historiasRecientes,
-      
+
       // Métodos
       recargarDatos,
       irACrearHistoria,

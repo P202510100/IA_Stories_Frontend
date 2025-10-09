@@ -171,9 +171,9 @@ export default {
         link.type = 'image/x-icon'
         link.rel = 'shortcut icon'
         
-        if (user.value?.tipo === 'alumno') {
+        if (user.value?.tipo === 'student') {
           link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎓</text></svg>'
-        } else if (user.value?.tipo === 'docente') {
+        } else if (user.value?.tipo === 'teacher') {
           link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">👨‍🏫</text></svg>'
         } else {
           link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📚</text></svg>'

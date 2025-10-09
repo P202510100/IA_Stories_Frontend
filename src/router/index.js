@@ -29,13 +29,9 @@ const routes = [
       if (user) {
         try {
           const userData = JSON.parse(user)
-          console.log('👤 Router: Usuario encontrado en localStorage:', userData.tipo)
-          
-          if (userData.tipo === 'alumno') {
-            console.log('👨‍🎓 Router: Redirigiendo a dashboard alumno')
+          if (userData.tipo === 'student') {
             return '/dashboard-alumno'
-          } else if (userData.tipo === 'docente') {
-            console.log('👨‍🏫 Router: Redirigiendo a dashboard docente')
+          } else if (userData.tipo === 'teacher') {
             return '/dashboard-docente'
           }
         } catch (e) {
@@ -108,7 +104,7 @@ const routes = [
     component: () => import('../views/DashboardAlumno.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Dashboard - IaStories'
     }
   },
@@ -119,7 +115,7 @@ const routes = [
     component: () => import('../views/CrearHistoria.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Crear Historia - IaStories'
     }
   },
@@ -130,7 +126,7 @@ const routes = [
     component: () => import('../views/MisHistorias.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Mis Historias - IaStories'
     }
   },
@@ -141,11 +137,11 @@ const routes = [
     component: () => import('../views/VerHistoria.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
       title: 'Ver Historia - IaStories'
     },
     props: (route) => ({
-      historiaId: parseInt(route.params.id)
+      historiaId: parseInt(route.params.id),
+      modo: route.query.modo || 'juego'
     })
   },
   
@@ -155,7 +151,7 @@ const routes = [
     component: () => import('../views/RankingView.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'alumno',
+      userType: 'student',
       title: 'Ranking - IaStories'
     }
   },
@@ -169,7 +165,7 @@ const routes = [
     component: () => import('../views/DashboardDocente.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'docente',
+      userType: 'teacher',
       title: 'Dashboard Docente - IaStories'
     }
   },
@@ -180,7 +176,7 @@ const routes = [
     component: () => import('../views/DetalleEstudiante.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'docente',
+      userType: 'teacher',
       title: 'Detalle Estudiante - IaStories'
     },
     props: (route) => ({
@@ -194,7 +190,7 @@ const routes = [
     component: () => import('../views/GestionEstudiantes.vue'),
     meta: { 
       requiresAuth: true, 
-      userType: 'docente',
+      userType: 'teacher',
       title: 'Gestión de Estudiantes - IaStories'
     }
   },
@@ -246,156 +242,122 @@ const router = createRouter({
 // ============================================================================
 //  GUARDS DE NAVEGACIÓN
 // ============================================================================
-
 router.beforeEach(async (to, from, next) => {
-  console.log(`🧭 Navegando a: ${to.path}`)
-  
-  try {
-    // Importar dinámicamente el store de auth
-    const { useAuthStore } = await import('../stores/auth.js')
-    const authStore = useAuthStore()
-    
-    // ============================================================================
-    //  PERMITIR ACCESO LIBRE A RUTAS DE RECUPERACIÓN
-    // ============================================================================
-    
-    // IMPORTANTE: Esto debe estar ANTES de cualquier otra verificación
-    if (to.meta.isRecoveryRoute) {
-      console.log('🔓 Ruta de recuperación detectada, permitiendo acceso libre')
-      document.title = to.meta.title || 'IaStories - Educación con IA'
-      next()
-      return
-    }
-    
-    // ============================================================================
-    //  INICIALIZAR AUTENTICACIÓN
-    // ===========================================================================
-    
-    if (!authStore.user && localStorage.getItem('user')) {
-      console.log('🔄 Inicializando autenticación desde localStorage...')
-      authStore.initAuth()
-    }
+    console.log(`🚀 Navegando a: ${to.path}`)
 
-    const isAuthenticated = authStore.isAuthenticated
-    const userType = authStore.userType
-    const user = authStore.user
-
-    console.log(`📊 Estado auth: ${isAuthenticated ? '✅ autenticado' : '❌ no autenticado'}, tipo: ${userType || 'ninguno'}`)
-
-    // ============================================================================
-    //  VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
-    // ============================================================================
-    
-    if (to.meta.requiresAuth && !isAuthenticated) {
-      console.log('❌ Acceso denegado: requiere autenticación')
-      localStorage.removeItem('user')
-      next('/login')
-      return
-    }
-
-    // ============================================================================
-    //  VERIFICAR RUTAS SOLO PARA INVITADOS
-    // ============================================================================
-    
-    if (to.meta.requiresGuest && isAuthenticated) {
-      //  VERIFICAR SI HAY FORCE=TRUE PARA PERMITIR LOGIN FORZADO
-      const forceLogin = to.query.force === 'true' || 
-                        new URLSearchParams(to.fullPath.split('?')[1] || '').get('force') === 'true'
-      
-      if (forceLogin) {
-        console.log('🔒 Guard: force=true detectado, permitiendo acceso al login')
-        authStore.logout()
-        next()
-        return
-      }
-      
-      console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
-      
-      if (userType === 'alumno') {
-        next('/dashboard-alumno')
-      } else if (userType === 'docente') {
-        next('/dashboard-docente')
-      } else {
-        console.warn('⚠️ Tipo de usuario desconocido:', userType)
-        authStore.logout()
-        next('/login')
-      }
-      return
-    }
-
-    // ============================================================================
-    //  VERIFICAR TIPO DE USUARIO ESPECÍFICO
-    // ============================================================================
-    
-    if (to.meta.userType && userType !== to.meta.userType) {
-      console.log(`❌ Acceso denegado: requiere ${to.meta.userType}, usuario es ${userType}`)
-      
-      // Redirigir al dashboard correcto del usuario actual
-      if (userType === 'alumno') {
-        next('/dashboard-alumno')
-      } else if (userType === 'docente') {
-        next('/dashboard-docente')
-      } else {
-        console.warn('⚠️ Tipo de usuario inválido, cerrando sesión')
-        authStore.logout()
-        next('/login')
-      }
-      return
-    }
-
-    // ============================================================================
-    //  VALIDACIONES ESPECÍFICAS DE RUTAS
-    // ============================================================================
-    
-    // Validar ID de historia
-    if (to.name === 'VerHistoria' && to.params.id) {
-      const historiaId = parseInt(to.params.id)
-      if (isNaN(historiaId) || historiaId <= 0) {
-        console.log('❌ ID de historia inválido')
-        next('/mis-historias')
-        return
-      }
-    }
-    
-    // Validar ID de estudiante
-    if (to.name === 'DetalleEstudiante' && to.params.id) {
-      const estudianteId = parseInt(to.params.id)
-      if (isNaN(estudianteId) || estudianteId <= 0) {
-        console.log('❌ ID de estudiante inválido')
-        next('/dashboard-docente')
-        return
-      }
-    }
-
-    // ============================================================================
-    //  ESTABLECER TÍTULO DE LA PÁGINA
-    // ============================================================================
-    
-    document.title = to.meta.title || 'IaStories - Educación con IA'
-
-    // ============================================================================
-    //  PERMITIR NAVEGACIÓN
-    // ============================================================================
-    
-    console.log('✅ Navegación permitida')
-    next()
-    
-  } catch (error) {
-    console.error('❌ Error en guard de navegación:', error)
-    
-    // En caso de error crítico, limpiar todo y redirigir al login
     try {
-      const { useAuthStore } = await import('../stores/auth.js')
-      const authStore = useAuthStore()
-      authStore.logout()
-    } catch (e) {
-      console.error('❌ Error limpiando store:', e)
+        // Importar dinámicamente el store de auth
+        const { useAuthStore } = await import('../stores/auth.js')
+        const authStore = useAuthStore()
+
+        // ========================================================================
+        // 🔄 INICIALIZAR AUTENTICACIÓN SI ES NECESARIO
+        // ========================================================================
+        if (!authStore.user && localStorage.getItem('user')) {
+            console.log('🔄 Inicializando autenticación desde localStorage...')
+            authStore.initAuth()
+        }
+
+        const isAuthenticated = authStore.isAuthenticated
+        const userType = authStore.userType
+        const user = authStore.user
+
+        console.log(`📊 Estado de auth: ${isAuthenticated ? 'autenticado' : 'no autenticado'}, tipo: ${userType}`)
+
+        // ========================================================================
+        // 🚪 VERIFICAR RUTAS QUE REQUIEREN AUTENTICACIÓN
+        // ========================================================================
+        if (to.meta.requiresAuth && !isAuthenticated) {
+            console.log('❌ Acceso denegado: requiere autenticación')
+            next('/login')
+            return
+        }
+
+        // ========================================================================
+        // 👤 VERIFICAR RUTAS SOLO PARA INVITADOS
+        // ========================================================================
+        if (to.meta.requiresGuest && isAuthenticated) {
+            console.log('♻️ Usuario ya autenticado, redirigiendo a dashboard')
+            if (userType === 'student') {
+                next('/dashboard-alumno')
+            } else if (userType === 'teacher') {
+                next('/dashboard-docente')
+            } else {
+                authStore.logout()
+                next('/login')
+            }
+            return
+        }
+
+        // ========================================================================
+        // 🔐 VERIFICAR TIPO DE USUARIO ESPECÍFICO (GENERAL)
+        // ========================================================================
+        if (to.name !== 'VerHistoria' && to.meta.userType && userType !== to.meta.userType) {
+            console.log(`❌ Acceso denegado: requiere tipo ${to.meta.userType}, usuario es ${userType}`)
+            if (userType === 'student') {
+                next('/dashboard-alumno')
+            } else if (userType === 'teacher') {
+                next('/dashboard-docente')
+            } else {
+                authStore.logout()
+                next('/login')
+            }
+            return
+        }
+
+        // ========================================================================
+        // 🎯 VALIDACIÓN ESPECIAL PARA VerHistoria
+        // ========================================================================
+        if (to.name === 'VerHistoria') {
+            const historiaId = parseInt(to.params.id)
+            const modo = to.query.modo || 'juego'
+
+            if (isNaN(historiaId) || historiaId <= 0) {
+                console.log('❌ ID de historia inválido')
+                next('/mis-historias')
+                return
+            }
+
+            if (userType === 'student' && modo === 'juego') {
+                next() // ✅ alumno puede jugar
+                return
+            }
+
+            if (userType === 'teacher' && modo === 'revision') {
+                next() // ✅ docente puede revisar
+                return
+            }
+
+            // ❌ acceso no válido
+            console.log('❌ Acceso no válido a VerHistoria')
+            if (userType === 'student') {
+                next('/dashboard-alumno')
+            } else if (userType === 'teacher') {
+                next('/dashboard-docente')
+            } else {
+                authStore.logout()
+                next('/login')
+            }
+            return
+        }
+
+        // ========================================================================
+        // 📋 ESTABLECER TÍTULO DE LA PÁGINA
+        // ========================================================================
+        document.title = to.meta.title || 'IaStories - Educación con IA'
+
+        // ========================================================================
+        // ✅ PERMITIR NAVEGACIÓN
+        // ========================================================================
+        console.log('✅ Navegación permitida')
+        next()
+
+    } catch (error) {
+        console.error('❌ Error en guard de navegación:', error)
+        localStorage.removeItem('user')
+        localStorage.removeItem('profile')
+        next('/login')
     }
-    
-    localStorage.removeItem('user')
-    localStorage.removeItem('profile')
-    next('/login')
-  }
 })
 
 // ============================================================================
@@ -430,9 +392,28 @@ router.onError((error, to, from) => {
     return
   }
   
-  // Otros errores - redirigir al login
-  console.log('❌ Error de navegación no recuperable, redirigiendo al login')
-  router.push('/login')
+  // Otros errores de navegación
+  console.log('🚨 Error de navegación no recuperable')
+  
+  // Intentar navegar a una ruta segura
+  try {
+    const user = localStorage.getItem('user')
+    if (user) {
+      const userData = JSON.parse(user)
+      if (userData.tipo === 'student') {
+        router.push('/dashboard-alumno')
+      } else if (userData.tipo === 'teacher') {
+        router.push('/dashboard-docente')
+      } else {
+        router.push('/login')
+      }
+    } else {
+      router.push('/login')
+    }
+  } catch (e) {
+    console.error('Error en recuperación de navegación:', e)
+    router.push('/login')
+  }
 })
 
 export default router

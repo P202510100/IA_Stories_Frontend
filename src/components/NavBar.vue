@@ -11,7 +11,7 @@
       
       <div class="nav-menu">
         <!-- Menú para alumnos -->
-        <template v-if="user && user.tipo === 'alumno'">
+        <template v-if="user && user.tipo === 'student'">
           <router-link to="/dashboard-alumno" class="nav-link">
             🏠 Dashboard
           </router-link>
@@ -27,7 +27,7 @@
         </template>
         
         <!-- Menú para docentes -->
-        <template v-if="user && user.tipo === 'docente'">
+        <template v-if="user && user.tipo === 'teacher'">
           <router-link to="/dashboard-docente" class="nav-link">
             🏠 Dashboard
           </router-link>
@@ -54,10 +54,10 @@
         <!-- Información del usuario -->
         <div class="user-info">
           <div class="user-avatar">
-            {{ getUserInitials(user.nombre) }}
+            {{ getUserInitials(user.fullname) }}
           </div>
           <div class="user-details">
-            <span class="user-name">{{ user.nombre || 'Usuario' }}</span>
+            <span class="user-name">{{ user.fullname || 'Usuario' }}</span>
             <span class="user-type">{{ getUserTypeLabel(user.tipo) }}</span>
           </div>
         </div>

@@ -1,8 +1,7 @@
-
 <template>
   <div class="ver-historia">
     <div class="container">
-      
+
       <!-- Loading state -->
       <div v-if="loading" class="loading-container">
         <div class="loading-spinner"></div>
@@ -11,7 +10,7 @@
 
       <!-- Main content -->
       <div v-else-if="historia && !error" class="historia-content">
-        
+
         <!-- Header de la historia -->
         <div class="historia-header">
           <button @click="volverAtras" class="btn-back">
@@ -25,6 +24,11 @@
               <span class="fecha">{{ formatDate(historia.created_at) }}</span>
             </div>
           </div>
+        </div>
+
+        <!-- Imagen de la historia -->
+        <div v-if="historia.imagen" class="historia-imagen">
+          <img :src="`data:image/png;base64,${historia.imagen}`" alt="Imagen de la historia" />
         </div>
 
         <!-- Contenido de la historia -->
@@ -58,10 +62,10 @@
 
           <div class="preguntas-container">
             <div
-              v-for="(pregunta, index) in preguntas"
-              :key="pregunta.id"
-              class="pregunta-card"
-              :class="{ 
+                v-for="(pregunta, index) in preguntas"
+                :key="pregunta.id"
+                class="pregunta-card"
+                :class="{
                 respondida: pregunta.respondida,
                 correcta: pregunta.respondida && pregunta.correcta,
                 incorrecta: pregunta.respondida && !pregunta.correcta
@@ -71,58 +75,58 @@
                 <span class="pregunta-tipo">{{ getTipoPreguntaLabel(pregunta.tipo) }}</span>
                 <span class="pregunta-numero">{{ index + 1 }}/{{ preguntas.length }}</span>
               </div>
-              
+
               <h3 class="pregunta-texto">{{ pregunta.pregunta }}</h3>
-              
+
               <!-- Opciones múltiples -->
               <div v-if="pregunta.tipo_respuesta === 'opcion_multiple'" class="opciones-container">
                 <div
-                  v-for="(opcion, opcionIndex) in pregunta.opciones"
-                  :key="opcionIndex"
-                  @click="responderPregunta(pregunta, opcionIndex)"
-                  :class="[
-                    'opcion',
-                    { 
-                      selected: pregunta.respuesta_alumno === opcionIndex,
-                      disabled: pregunta.respondida
-                    }
-                  ]"
+                    v-for="(opcion, opcionIndex) in pregunta.opciones"
+                    :key="opcionIndex"
+                    @click="historia.status === 'IN_PROGRESS' ? responderPregunta(pregunta, opcionIndex) : null"
+                    :class="[
+                      'opcion',
+                      {
+                        selected: pregunta.respuesta_alumno === opcionIndex,
+                        disabled: pregunta.respondida || historia.status === 'COMPLETED'
+                      }
+                    ]"
                 >
                   <span class="opcion-letra">{{ String.fromCharCode(65 + opcionIndex) }})</span>
                   <span class="opcion-texto">{{ opcion }}</span>
                 </div>
               </div>
-              
+
               <!-- Respuesta de texto -->
               <div v-else-if="pregunta.tipo_respuesta === 'texto'" class="respuesta-texto-container">
                 <textarea
-                  v-model="pregunta.respuesta_texto"
-                  @blur="responderPreguntaTexto(pregunta)"
-                  :disabled="pregunta.respondida"
-                  placeholder="Escribe tu respuesta aquí..."
-                  class="respuesta-textarea"
-                  rows="4"
+                    v-model="pregunta.respuesta_texto"
+                    @blur="historia.status === 'IN_PROGRESS' ? responderPreguntaTexto(pregunta) : null"
+                    :disabled="pregunta.respondida || historia.status === 'COMPLETED'"
+                    placeholder="Escribe tu respuesta aquí..."
+                    class="respuesta-textarea"
+                    rows="4"
                 ></textarea>
                 <button
-                  v-if="!pregunta.respondida && pregunta.respuesta_texto"
-                  @click="responderPreguntaTexto(pregunta)"
-                  class="btn-enviar-respuesta"
+                    v-if="historia.status === 'IN_PROGRESS' && !pregunta.respondida && pregunta.respuesta_texto"
+                    @click="responderPreguntaTexto(pregunta)"
+                    class="btn-enviar-respuesta"
                 >
                   Enviar Respuesta
                 </button>
               </div>
 
               <!-- Resultado de la pregunta -->
-              <div v-if="pregunta.respondida" class="resultado-pregunta">
+              <div v-if="pregunta.respondida || historia.status === 'COMPLETED'" class="resultado-pregunta">
                 <div v-if="pregunta.correcta" class="resultado correcto">
                   ✅ ¡Correcto! +{{ pregunta.puntos_obtenidos }} puntos
                 </div>
                 <div v-else class="resultado incorrecto">
                   ❌ Respuesta incorrecta
-                  <button 
-                    v-if="pregunta.puede_repetir"
-                    @click="repetirPregunta(pregunta)"
-                    class="btn-repetir"
+                  <button
+                      v-if="historia.status === 'IN_PROGRESS' && pregunta.puede_repetir"
+                      @click="repetirPregunta(pregunta)"
+                      class="btn-repetir"
                   >
                     🔄 Intentar de nuevo
                   </button>
@@ -136,20 +140,29 @@
         </div>
 
         <!-- Mensaje de finalización -->
-        <div v-if="todasPreguntasRespondidas" class="finalizacion-section">
+        <div v-if="historia.status === 'COMPLETED'" class="finalizacion-section">
           <div class="felicitacion-card">
             <div class="felicitacion-icon">🎉</div>
-            <h3>¡Felicitaciones!</h3>
-            <p>Has completado todas las preguntas de esta historia.</p>
+            <h3>¡Has terminado tu examen!</h3>
+            <p>Este examen ya fue completado y las respuestas están bloqueadas.</p>
+
             <div class="puntos-totales">
               ⭐ Puntos obtenidos: {{ puntosObtenidos }}
             </div>
+
             <div class="felicitacion-actions">
               <button @click="verOtraHistoria" class="btn btn-primary">
                 📚 Ver Otra Historia
               </button>
               <button @click="crearNuevaHistoria" class="btn btn-secondary">
                 ✨ Crear Nueva Historia
+              </button>
+              <button
+                  @click="confirmarReinicio"
+                  class="btn btn-danger"
+                  :disabled="historia.has_restarted"
+              >
+                🔄 Reiniciar Examen
               </button>
             </div>
           </div>
@@ -177,16 +190,25 @@
           </button>
         </div>
       </div>
-
+      <!-- Botones de acciones generales -->
+      <div class="acciones-examen" v-if="historia.status === 'IN_PROGRESS'">
+        <button @click="guardarProgreso" class="btn btn-secondary" :disabled="saving">
+          💾 {{ saving ? 'Guardando...' : 'Guardar Progreso' }}
+        </button>
+        <button @click="finalizarExamen" class="btn btn-primary" :disabled="saving">
+          ✅ {{ saving ? 'Finalizando...' : 'Finalizar Examen' }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import { useHistoriasStore } from '../stores/historias'
+import {computed, onMounted, ref} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {useAuthStore} from '../stores/auth'
+import api from "@/services/api.js";
+import apiService from "@/services/api.js";
 
 export default {
   name: 'VerHistoria',
@@ -194,18 +216,18 @@ export default {
     const route = useRoute()
     const router = useRouter()
     const authStore = useAuthStore()
-    const historiasStore = useHistoriasStore()
-    
-    // Estado del componente
-    const historia = ref(null)
+
+    const saving = ref(false)
+    const savedOnce = ref(false)
+
+    const historia = ref({})
     const preguntas = ref([])
     const loading = ref(true)
     const loadingPreguntas = ref(false)
     const error = ref(null)
 
-    // Computed properties
     const profile = computed(() => authStore.profile)
-    
+
     const personajes = computed(() => {
       if (!historia.value?.personajes) return []
       try {
@@ -218,59 +240,245 @@ export default {
       }
     })
 
-    const preguntasRespondidas = computed(() => 
-      preguntas.value.filter(p => p.respondida).length
-    )
+    async function guardarProgreso() {
+      if (!confirm("¿Quieres guardar tu progreso?")) return;
+      try {
+        saving.value = true;
 
-    const todasPreguntasRespondidas = computed(() => 
-      preguntas.value.length > 0 && preguntas.value.every(p => p.respondida)
-    )
+        const payload = preguntas.value
+            .filter(p => p.respondida)
+            .map(p => {
+              const isOM = p.tipo_respuesta === "opcion_multiple";
+              return {
+                question_index: p.id,
+                response: isOM ? String(p.respuesta_alumno) : p.respuesta_texto,
+                is_correct: isOM ? Boolean(p.correcta) : null,
+              };
+            });
 
-    const puntosObtenidos = computed(() => 
-      preguntas.value.reduce((total, p) => total + (p.puntos_obtenidos || 0), 0)
-    )
+        if (payload.length > 0) {
+          await api.guardarProgreso(historia.value.id, payload);
+        }
 
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-    
+        await api.actualizarRecord(historia.value.id, {
+          status: "IN_PROGRESS",
+          total_questions: preguntas.value.length,
+        });
+
+        alert("✅ Progreso guardado.");
+      } catch (err) {
+        console.error("❌ Error guardando progreso:", err);
+        error.value = "No se pudo guardar el progreso";
+        alert("❌ No se pudo guardar el progreso");
+      } finally {
+        saving.value = false;
+      }
+    }
+
+    async function finalizarExamen() {
+      if (historia.value.status !== "IN_PROGRESS") return;
+      const confirmFinish = confirm(
+          "Vas a finalizar tu examen. No podrás cambiar respuestas luego. ¿Deseas continuar?"
+      );
+      if (!confirmFinish) return;
+
+      try {
+        saving.value = true;
+        // 🔥 Enviar respuestas primero
+        const payload = preguntas.value
+            .filter(p => p.respondida)
+            .map(p => ({
+              question_index: p.id,
+              response: p.tipo_respuesta === "opcion_multiple"
+                  ? String(p.respuesta_alumno)
+                  : p.respuesta_texto,
+              is_correct: p.tipo_respuesta === "opcion_multiple" ? Boolean(p.correcta) : null,
+            }))
+
+        if (payload.length > 0) {
+          await api.guardarProgreso(historia.value.id, payload)
+        }
+
+        // Luego marcar examen como COMPLETED
+        const updated = await api.actualizarRecord(historia.value.id, {
+          status: "COMPLETED"
+        })
+
+        historia.value.status = updated.status
+        alert("🎉 ¡Has terminado tu examen!")
+      } catch (err) {
+        console.error("❌ Error finalizando examen:", err);
+        error.value = "No se pudo finalizar el examen";
+        alert("❌ No se pudo finalizar el examen");
+      } finally {
+        saving.value = false;
+      }
+    }
+
+
+    const preguntasRespondidas = computed(() => preguntas.value.filter(p => p.respondida).length)
+    const todasPreguntasRespondidas = computed(() => preguntas.value.length > 0 && preguntas.value.every(p => p.respondida))
+    const puntosObtenidos = computed(() => preguntas.value.reduce((total, p) => total + (p.puntos_obtenidos || 0), 0))
+
     onMounted(async () => {
       console.log('📖 Iniciando VerHistoria...')
-      
-      // Verificar autenticación
       if (!authStore.isAuthenticated) {
         console.error('❌ Usuario no autenticado')
         router.push('/login')
         return
       }
-
       await cargarHistoriaCompleta()
     })
 
-    // ============================================================================
-    // 📚 CARGA DE DATOS - SOLO BACKEND REAL
-    // ============================================================================
-    
+
+    async function confirmarReinicio() {
+      if (historia.value.has_restarted) {
+        alert("⚠️ Ya usaste tu único reinicio para este examen.");
+        return;
+      }
+
+      const confirmar = confirm(
+          "⚠️ Estás a punto de reiniciar este examen.\n" +
+          "Esto eliminará todas tus respuestas actuales y solo puedes hacerlo una vez.\n\n" +
+          "¿Deseas continuar?"
+      );
+
+      if (confirmar) {
+        await reiniciarExamen();
+      }
+    }
+
+    function safeParseQuestions(q) {
+      try {
+        if (!q) return [];
+        if (Array.isArray(q)) return q;
+        if (typeof q === 'string') return JSON.parse(q);
+        return [];
+      } catch {
+        return [];
+      }
+    }
+
+    function resolveCorrectIndex(q, opciones) {
+      // Posibles llaves que tu backend puede usar
+      let rc = q.respuesta_correcta ?? q.answer ?? q.correct ?? q.correct_index ?? q.correctOption ?? 0;
+
+      // Si ya es número (o string numérica), conviértelo a entero
+      if (typeof rc === 'number' || (typeof rc === 'string' && /^\d+$/.test(rc))) {
+        const n = Number(rc);
+        return Number.isInteger(n) && n >= 0 && n < opciones.length ? n : 0;
+      }
+
+      // Si viene como texto de la opción correcta
+      if (typeof rc === 'string') {
+        const needle = rc.trim().toLowerCase();
+        const idx = opciones.findIndex(o => String(o).trim().toLowerCase() === needle);
+        return idx >= 0 ? idx : 0;
+      }
+
+      // Cualquier otro caso: 0 por defecto
+      return 0;
+    }
+
+    function normalizeQuestions(raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.map((q, i) => {
+        const opciones = q.opciones || q.options || q.alternativas || [];
+        const respuesta_correcta = resolveCorrectIndex(q, opciones);
+        return {
+          id: i,
+          pregunta: q.pregunta || q.question || q.texto || q.text || `Pregunta ${i + 1}`,
+          opciones,
+          respuesta_correcta,
+          tipo_respuesta: Array.isArray(opciones) && opciones.length > 0 ? 'opcion_multiple' : 'texto',
+          respondida: false,
+          correcta: null,
+          respuesta_alumno: null,
+          respuesta_texto: '',
+          puntos_obtenidos: 0,
+          explicacion: q.explicacion || q.explanation || '',
+          puede_repetir: true,
+          tipo: q.tipo || q.type || 'inferencial'
+        };
+      });
+    }
+
+    async function reiniciarExamen() {
+      try {
+        saving.value = true;
+        const updated = await api.reiniciarExamen(historia.value.id);
+
+        // actualizar estado local
+        historia.value.status = updated.status;
+        historia.value.has_restarted = updated.has_restarted;
+        preguntas.value = []; // limpiar preguntas para que se recarguen
+
+        alert("✅ Examen reiniciado. Puedes volver a responderlo desde cero.");
+        await recargarHistoria();
+      } catch (err) {
+        console.error("❌ Error reiniciando examen:", err);
+        alert("❌ No se pudo reiniciar el examen.");
+      } finally {
+        saving.value = false;
+      }
+    }
+
     async function cargarHistoriaCompleta() {
       loading.value = true
       error.value = null
-
       try {
         const historiaId = route.params.id
-        if (!historiaId) {
-          throw new Error('ID de historia no encontrado')
+        if (!historiaId) throw new Error('ID de historia no encontrado')
+        console.log(`📖 Cargando historia ${historiaId}...`, typeof +historiaId)
+
+        const response = await api.cargarHistoriaPorId(+historiaId)
+
+        console.log(response)
+
+        historia.value = {
+          id: response.id,
+          status: response.status,
+          puntos: response.points,
+          correctas: response.correct_answers,
+          completado: response.completed_at,
+          total_preguntas: response.total_questions,
+          has_restarted: response.has_restarted || false,
+          // mapeamos story
+          titulo: response.story?.title || '',
+          contenido: response.story?.content || '',
+          tema: response.story?.topic || '',
+          personajes: response.story?.characters || [],
+          created_at: response.story.created_at,
+          imagen: response.story?.image_b64 || null
         }
 
-        console.log(`📖 Cargando historia ${historiaId}...`)
+        // 🔥 Mapear preguntas a la estructura que usa el frontend
+        // Normalizar siempre a array
+        const preguntasBackend = Array.isArray(response.story?.question_answer)
+            ? response.story.question_answer
+            : [];
 
-        // Cargar la historia
-        historia.value = await historiasStore.obtenerHistoria(historiaId)
-        
-        // Cargar las preguntas
-        await cargarPreguntas(historiaId)
+        const answersBackend = Array.isArray(response.answers) ? response.answers : [];
 
+        // 🔥 Mapear preguntas
+        preguntas.value = normalizeQuestions(preguntasBackend);
+
+        // 🔄 Aplicar respuestas guardadas
+        answersBackend.forEach(ans => {
+          const pregunta = preguntas.value.find(p => p.id === ans.question_index);
+          if (pregunta) {
+            if (pregunta.tipo_respuesta === "opcion_multiple") {
+              pregunta.respuesta_alumno = Number(ans.response);
+              pregunta.correcta = ans.is_correct;
+              pregunta.respondida = true;
+              pregunta.puntos_obtenidos = ans.is_correct ? 1 : 0;
+            } else {
+              pregunta.respuesta_texto = ans.response;
+              pregunta.respondida = true;
+            }
+          }
+        });
         console.log('✅ Historia y preguntas cargadas')
-
       } catch (err) {
         console.error('❌ Error cargando historia:', err)
         error.value = err.message || 'Error cargando la historia'
@@ -281,26 +489,12 @@ export default {
 
     async function cargarPreguntas(historiaId) {
       loadingPreguntas.value = true
-
       try {
         console.log(`❓ Cargando preguntas para historia ${historiaId}...`)
-        
-        const preguntasData = await historiasStore.cargarPreguntasHistoria(historiaId)
-        preguntas.value = preguntasData.map(p => ({
-          ...p,
-          respondida: false,
-          respuesta_alumno: null,
-          respuesta_texto: '',
-          correcta: null,
-          puntos_obtenidos: 0,
-          puede_repetir: false
-        }))
 
         console.log(`✅ ${preguntas.value.length} preguntas cargadas`)
-
       } catch (err) {
         console.error('❌ Error cargando preguntas:', err)
-        // No lanzar error, continuar sin preguntas
       } finally {
         loadingPreguntas.value = false
       }
@@ -310,89 +504,29 @@ export default {
       await cargarHistoriaCompleta()
     }
 
-    // ============================================================================
-    // 🎯 GESTIÓN DE PREGUNTAS - SOLO BACKEND REAL
-    // ============================================================================
-    
     async function responderPregunta(pregunta, respuestaIndex) {
-      if (pregunta.respondida) return
+      if (historia.value.status !== "IN_PROGRESS") return
+      // Solo actualizar localmente
+      if (pregunta.respondida) return;
 
-      try {
-        console.log(`✍️ Respondiendo pregunta ${pregunta.id} con opción ${respuestaIndex}`)
-
-        const datosRespuesta = {
-          pregunta_id: pregunta.id,
-          historia_id: historia.value.id,
-          alumno_id: (profile.value?.id || authStore.user?.id || JSON.parse(localStorage.getItem('user') || '{}').id),
-          respuesta_seleccionada: respuestaIndex,
-          tipo_pregunta: pregunta.tipo
-        }
-
-        const resultado = await historiasStore.responderPregunta(datosRespuesta)
-
-        // Actualizar pregunta local
-        pregunta.respondida = true
-        pregunta.respuesta_alumno = respuestaIndex
-        pregunta.correcta = resultado.correcta
-        pregunta.puntos_obtenidos = resultado.puntos_obtenidos || 0
-        pregunta.puede_repetir = !resultado.correcta && resultado.puede_repetir
-        pregunta.explicacion = resultado.explicacion
-
-        console.log(`✅ Pregunta respondida: ${resultado.correcta ? 'CORRECTA' : 'INCORRECTA'}`)
-
-      } catch (err) {
-        console.error('❌ Error respondiendo pregunta:', err)
-        error.value = 'Error enviando la respuesta'
-      }
+      pregunta.respuesta_alumno = respuestaIndex
+      pregunta.respondida = true
+      pregunta.correcta = respuestaIndex === pregunta.respuesta_correcta
+      pregunta.puntos_obtenidos = pregunta.correcta ? 1 : 0
     }
 
     async function responderPreguntaTexto(pregunta) {
-      if (pregunta.respondida || !pregunta.respuesta_texto.trim()) return
-
-      try {
-        console.log(`✍️ Respondiendo pregunta de texto ${pregunta.id}`)
-
-        const datosRespuesta = {
-          pregunta_id: pregunta.id,
-          historia_id: historia.value.id,
-          alumno_id: (profile.value?.id || authStore.user?.id || JSON.parse(localStorage.getItem('user') || '{}').id),
-          respuesta_texto: pregunta.respuesta_texto.trim(),
-          tipo_pregunta: pregunta.tipo
-        }
-
-        const resultado = await historiasStore.responderPregunta(datosRespuesta)
-
-        // Actualizar pregunta local
-        pregunta.respondida = true
-        pregunta.correcta = resultado.correcta
-        pregunta.puntos_obtenidos = resultado.puntos_obtenidos || 0
-        pregunta.puede_repetir = false // Las preguntas de texto generalmente no se repiten
-
-        console.log('✅ Pregunta de texto respondida')
-
-      } catch (err) {
-        console.error('❌ Error respondiendo pregunta de texto:', err)
-        error.value = 'Error enviando la respuesta'
-      }
+      if (historia.value.status !== "IN_PROGRESS") return
+      if (!pregunta.respuesta_texto.trim()) return
+      // Guardar solo localmente
+      pregunta.respondida = true
+      pregunta.correcta = null // lo evalúa el backend luego
+      pregunta.puntos_obtenidos = 0
     }
 
     async function repetirPregunta(pregunta) {
       try {
         console.log(`🔄 Repitiendo pregunta ${pregunta.id}`)
-
-        await historiasStore.repetirPregunta({
-          pregunta_id: pregunta.id,
-          alumno_id: (profile.value?.id || authStore.user?.id || JSON.parse(localStorage.getItem('user') || '{}').id)
-        })
-
-        // Resetear pregunta para nuevo intento
-        pregunta.respondida = false
-        pregunta.respuesta_alumno = null
-        pregunta.correcta = null
-        pregunta.puntos_obtenidos = 0
-        pregunta.puede_repetir = false
-
-        console.log('✅ Pregunta disponible para repetir')
 
       } catch (err) {
         console.error('❌ Error repitiendo pregunta:', err)
@@ -400,97 +534,49 @@ export default {
       }
     }
 
-    // ============================================================================
-    // 🧭 NAVEGACIÓN
-    // ============================================================================
-    
-    function volverAtras() {
-      router.go(-1)
-    }
+    function volverAtras() { router.go(-1) }
+    function verOtraHistoria() { router.push('/mis-historias') }
+    function crearNuevaHistoria() { router.push('/crear-historia') }
 
-    function verOtraHistoria() {
-      router.push('/mis-historias')
-    }
-
-    function crearNuevaHistoria() {
-      router.push('/crear-historia')
-    }
-
-    // ============================================================================
-    // 🔧 MÉTODOS AUXILIARES
-    // ============================================================================
-    
     function getTemaLabel(tema) {
-      const labels = {
-        'aventura': 'Aventura',
-        'fantasia': 'Fantasía',
-        'espacio': 'Espacio',
-        'naturaleza': 'Naturaleza',
-        'misterio': 'Misterio',
-        'ciencia': 'Ciencia',
-        'deportes': 'Deportes',
-        'amistad': 'Amistad'
-      }
+      const labels = { aventura: 'Aventura', fantasia: 'Fantasía', espacio: 'Espacio', naturaleza: 'Naturaleza', misterio: 'Misterio', ciencia: 'Ciencia', deportes: 'Deportes', amistad: 'Amistad' }
       return labels[tema] || tema
     }
 
     function getTipoPreguntaLabel(tipo) {
-      const labels = {
-        'inferencial': '🤔 Inferencial',
-        'juicio_critico': '⚖️ Juicio Crítico',
-        'creativa': '💡 Creativa'
-      }
+      const labels = { inferencial: '🤔 Inferencial', juicio_critico: '⚖️ Juicio Crítico', creativa: '💡 Creativa' }
       return labels[tipo] || tipo
     }
 
-    function getParrafos(contenido) {
-      if (!contenido) return []
-      return contenido.split('\n').filter(p => p.trim())
-    }
-
+    function getParrafos(contenido) { if (!contenido) return []; return contenido.split('\n').filter(p => p.trim()) }
     function formatDate(dateString) {
       if (!dateString) return ''
-      
-      try {
-        const date = new Date(dateString)
-        return date.toLocaleDateString('es-ES', { 
-          day: 'numeric', 
-          month: 'long',
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return ''
+
+      const now = new Date()
+      const diffTime = now.getTime() - date.getTime()
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+      if (diffDays < 0) {
+        // fecha en el futuro: mostrar fecha exacta
+        return date.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short',
           year: 'numeric'
         })
-      } catch (e) {
-        return ''
       }
-    }
+      if (diffDays === 0) return 'Hoy'
+      if (diffDays === 1) return 'Ayer'
+      if (diffDays < 7) return `Hace ${diffDays} días`
 
-    return {
-      // Estado
-      historia,
-      preguntas,
-      loading,
-      loadingPreguntas,
-      error,
-      
-      // Computed
-      profile,
-      personajes,
-      preguntasRespondidas,
-      todasPreguntasRespondidas,
-      puntosObtenidos,
-      
-      // Métodos
-      recargarHistoria,
-      responderPregunta,
-      responderPreguntaTexto,
-      repetirPregunta,
-      volverAtras,
-      verOtraHistoria,
-      crearNuevaHistoria,
-      getTemaLabel,
-      getTipoPreguntaLabel,
-      getParrafos,
-      formatDate
+      return date.toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })
     }
+    return { confirmarReinicio, saving, guardarProgreso, finalizarExamen, historia, preguntas, loading, loadingPreguntas, error, profile, personajes, preguntasRespondidas, todasPreguntasRespondidas, puntosObtenidos, recargarHistoria, responderPregunta, responderPreguntaTexto, repetirPregunta, volverAtras, verOtraHistoria, crearNuevaHistoria, getTemaLabel, getTipoPreguntaLabel, getParrafos, formatDate }
   }
 }
 </script>
@@ -978,5 +1064,20 @@ export default {
   .felicitacion-actions {
     flex-direction: column;
   }
+  .historia-imagen img {
+    max-width: 100%;
+  }
+}
+.historia-imagen {
+  text-align: center;
+  margin: 20px 0;
+}
+
+.historia-imagen img {
+  max-width: 600px; /* limita a 600px en desktop */
+  width: 100%; /* ocupa 100% hasta ese límite */
+  height: auto; /* mantiene proporción */
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 </style>

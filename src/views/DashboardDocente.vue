@@ -1,13 +1,13 @@
 <template>
   <div class="dashboard-docente-container">
     <div class="container">
-      
+
       <!-- Header de bienvenida -->
       <div class="welcome-header">
-        <h1>👨‍🏫 Bienvenido, {{ user.nombre }}</h1>
+        <h1>👨‍🏫 Bienvenido, {{ user.fullname }}</h1>
         <p>Panel de control para gestión de estudiantes</p>
       </div>
-      
+
       <!-- Estadísticas generales -->
       <div class="stats-grid" v-if="estadisticas">
         <div class="stat-card">
@@ -17,7 +17,7 @@
             <p>Estudiantes Activos</p>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">📚</div>
           <div class="stat-info">
@@ -25,7 +25,7 @@
             <p>Historias Creadas</p>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">🎯</div>
           <div class="stat-info">
@@ -33,7 +33,7 @@
             <p>Actividades Completadas</p>
           </div>
         </div>
-        
+
         <div class="stat-card">
           <div class="stat-icon">⭐</div>
           <div class="stat-info">
@@ -42,10 +42,10 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Secciones principales -->
       <div class="dashboard-sections">
-        
+
         <!-- Lista de estudiantes -->
         <div class="section">
           <div class="section-header">
@@ -82,35 +82,38 @@
               class="estudiante-card"
             >
               <div class="estudiante-avatar">
-                {{ getInitials(estudiante.nombre) }}
+                {{ getInitials(estudiante.fullname) }}
               </div>
-              
+
               <div class="estudiante-info">
-                <h3>{{ estudiante.nombre }}</h3>
+                <h3>{{ estudiante.fullname }}</h3>
                 <p class="estudiante-email">{{ estudiante.email }}</p>
                 <div class="estudiante-stats">
                   <span class="stat-mini">
-                    📚 {{ estudiante.total_historias || 0 }} historias
-                  </span>
-                  <span class="stat-mini">
-                    ⭐ {{ estudiante.puntos_totales || 0 }} puntos
+                    ⭐ {{ estudiante.total_points || 0 }} puntos
                   </span>
                 </div>
-                
+
                 <div class="estudiante-nivel">
-                  <span class="nivel-badge" :class="getNivelClase(estudiante.nivel_actual)">
-                    {{ estudiante.nivel_actual || 'Principiante' }}
+                  <span class="nivel-badge" :class="getNivelClase(estudiante.current_level)">
+                    {{ estudiante.current_level || 'Principiante' }}
                   </span>
                 </div>
               </div>
-              
+
               <div class="estudiante-actions">
                 <span class="btn-ver">Ver Detalle →</span>
               </div>
             </div>
           </div>
+
+          <div v-else-if="!loading" class="empty-students">
+            <div class="empty-icon">👨‍🎓</div>
+            <h3>No hay estudiantes asignados</h3>
+            <p>Los estudiantes aparecerán aquí cuando se registren y se asignen a tu clase</p>
+          </div>
         </div>
-        
+
         <!-- Ranking de estudiantes -->
         <div class="section">
           <div class="section-header">
@@ -121,8 +124,6 @@
               <option value="actividades">Por Actividades</option>
             </select>
           </div>
-          
-          <!--  RANKING REAL O VACÍO -->
           <div v-if="rankingEstudiantes.length > 0" class="ranking-list">
             <div
               v-for="(estudiante, index) in rankingEstudiantes"
@@ -134,17 +135,17 @@
                 <span class="position-number">{{ index + 1 }}</span>
                 <span class="position-medal">{{ getRankingMedal(index) }}</span>
               </div>
-              
+
               <div class="ranking-info">
-                <h4>{{ estudiante.nombre }}</h4>
+                <h4>{{ estudiante.fullname }}</h4>
                 <p class="ranking-value">
                   {{ getRankingValue(estudiante) }}
                 </p>
               </div>
-              
+
               <div class="ranking-progress">
                 <div class="progress-bar">
-                  <div 
+                  <div
                     class="progress-fill"
                     :style="{ width: getRankingProgress(estudiante, index) + '%' }"
                   ></div>
@@ -160,15 +161,13 @@
             </p>
           </div>
         </div>
-        
+
         <!-- Actividad reciente -->
         <div class="section">
           <div class="section-header">
             <h2>📈 Actividad Reciente</h2>
             <span class="periodo-actual">Últimos 7 días</span>
           </div>
-          
-          <!--  ACTIVIDAD  O VACÍA -->
           <div v-if="actividadReciente.length > 0" class="actividad-list">
             <div
               v-for="actividad in actividadReciente"
@@ -178,19 +177,19 @@
               <div class="actividad-icon">
                 {{ getActividadIcon(actividad.tipo) }}
               </div>
-              
+
               <div class="actividad-info">
                 <h4>{{ actividad.estudiante_nombre }}</h4>
                 <p>{{ actividad.descripcion }}</p>
                 <span class="actividad-tiempo">{{ formatTimeAgo(actividad.fecha) }}</span>
               </div>
-              
+
               <div class="actividad-resultado">
                 <span class="puntos-ganados">+{{ actividad.puntos || 0 }} pts</span>
               </div>
             </div>
           </div>
-          
+
           <div v-else class="empty-activity">
             <p>📊 No hay actividad reciente para mostrar</p>
             <p v-if="estudiantes.length === 0" class="empty-subtitle">
@@ -199,12 +198,12 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Loading -->
       <div v-if="loading" class="loading">
         🔄 Cargando información del dashboard...
       </div>
-      
+
       <!-- Error -->
       <div v-if="error" class="error">
         ⚠️ {{ error }}
@@ -212,7 +211,7 @@
           🔄 Reintentar
         </button>
       </div>
-      
+
     </div>
   </div>
 </template>
@@ -228,7 +227,7 @@ export default {
   setup() {
     const router = useRouter()
     const authStore = useAuthStore()
-    
+
     const estadisticas = ref(null)
     const estudiantes = ref([])
     const rankingEstudiantes = ref([])
@@ -236,122 +235,141 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const tipoRanking = ref('puntos')
-    
+
     const user = computed(() => authStore.user)
     const profile = computed(() => authStore.profile)
-    
+
     const cargarDatos = async () => {
       try {
         loading.value = true
         error.value = null
-        
+
         if (!profile.value?.id) {
           throw new Error('No se encontró el perfil del docente')
         }
-        
+
+        // 1) Traer estudiantes del docente
         const docenteId = profile.value.id
-        console.log(`📊 Cargando datos reales para docente ${docenteId}`)
-        
-        //  1. CARGAR ESTUDIANTES 
-        try {
-          console.log('👥 Cargando estudiantes desde backend...')
-          const estudiantesResponse = await apiService.obtenerEstudiantesDocente(docenteId)
-          estudiantes.value = estudiantesResponse.estudiantes || []
-          
-          console.log(`✅ ${estudiantes.value.length} estudiantes reales cargados`)
-          
-          // Calcular estadísticas
-          estadisticas.value = {
-            total_estudiantes: estudiantes.value.length,
-            total_historias: estudiantes.value.reduce((sum, est) => sum + (est.total_historias || 0), 0),
-            total_actividades: estudiantes.value.reduce((sum, est) => sum + (est.actividades_completadas || 0), 0),
-            promedio_puntos: estudiantes.value.length > 0 
-              ? Math.round(estudiantes.value.reduce((sum, est) => sum + (est.puntos_totales || 0), 0) / estudiantes.value.length)
-              : 0
-          }
-          
-        } catch (err) {
-          console.error('❌ Error cargando estudiantes:', err)
-          
-          
-          estudiantes.value = []
-          estadisticas.value = {
-            total_estudiantes: 0,
-            total_historias: 0,
-            total_actividades: 0,
-            promedio_puntos: 0
-          }
-          
-          error.value = 'No se pudieron cargar los estudiantes. Verifica tu conexión y que tengas estudiantes asociados.'
-        }
-        
-        //  2. CARGAR RANKING DESDE ESTUDIANTES
-        try {
-          if (estudiantes.value.length > 0) {
-            rankingEstudiantes.value = [...estudiantes.value]
-              .filter(est => est.puntos_totales > 0)
-              .sort((a, b) => (b.puntos_totales || 0) - (a.puntos_totales || 0))
-              .slice(0, 5)
-          } else {
-            rankingEstudiantes.value = []
-          }
-        } catch (rankingError) {
-          console.error('❌ Error calculando ranking:', rankingError)
-          rankingEstudiantes.value = []
-        }
-        
-        //  3. GENERAR ACTIVIDAD DESDE ESTUDIANTES 
-        actividadReciente.value = generarActividadDesdeEstudiantesReales()
-        
+        const resp = await apiService.obtenerEstudiantesDocente(docenteId)
+        console.log("repsonse: ", resp)
+        const raw = resp?.estudiantes ?? resp ?? []
+
+        // 2) Normalizar estudiantes
+        estudiantes.value = raw.map(normalizarEstudiante)
+        console.log('this is stunde.value: ',estudiantes.value)
+        // 3) Estadísticas generales
+        estadisticas.value = calcularEstadisticas(estudiantes.value)
+
+        // 4) Ranking (top 3)
+        rankingEstudiantes.value = calcularRanking(estudiantes.value, tipoRanking.value)
+
+        // 5) Actividad reciente (3 últimas historias creadas)
+        actividadReciente.value = construirActividadReciente(estudiantes.value)
+
       } catch (err) {
         console.error('❌ Error cargando datos del dashboard:', err)
         error.value = `Error al cargar los datos: ${err.message}`
+        estudiantes.value = []
+        estadisticas.value = { total_estudiantes: 0, total_historias: 0, total_actividades: 0, promedio_puntos: 0 }
+        rankingEstudiantes.value = []
+        actividadReciente.value = []
       } finally {
         loading.value = false
       }
     }
-    
-    const generarActividadDesdeEstudiantesReales = () => {
-      if (estudiantes.value.length === 0) {
-        return []
+
+    function normalizarEstudiante(s) {
+      const historiasArray = Array.isArray(s.historias) ? s.historias : []
+      const historiasNorm = historiasArray.map(h => ({
+        id: h.id || h.story_id,
+        title: h.title || h.story?.title || 'Sin título',
+        created_at: h.created_at || h.story?.created_at || h.fecha_creacion,
+        points: h.points ?? h.puntos ?? 0
+      }))
+
+      return {
+        id: s.id || s.user_id || s.alumno_id,
+        fullname: s.fullname || [s.nombre, s.apellido].filter(Boolean).join(' ') || 'Sin nombre',
+        email: s.email || '-',
+        current_level: s.current_level || s.nivel || 'Principiante',
+
+        // Métricas normalizadas:
+        total_points: s.total_points ?? s.puntos_totales ?? 0,
+        total_historias: s.total_historias ?? s.story_count ?? historiasNorm.length,
+        total_actividades: s.total_actividades ?? s.actividades_completadas ?? s.activities_count ?? 0,
+
+        // Historias normalizadas:
+        historias: historiasNorm
       }
-      
-      const actividades = []
-      
-      estudiantes.value.forEach(estudiante => {
-        if (estudiante.ultima_actividad) {
-          actividades.push({
-            id: estudiante.user_id || estudiante.alumno_id || estudiante.id,
-            estudiante_nombre: estudiante.nombre,
-            tipo: 'actividad_reciente',
-            descripcion: `Última actividad registrada`,
-            puntos: estudiante.puntos_totales || 0,
-            fecha: estudiante.ultima_actividad
-          })
+    }
+
+    function calcularEstadisticas(lista) {
+      const total_estudiantes = lista.length
+      const total_historias = lista.reduce((acc, e) => acc + (e.total_historias || 0), 0)
+      const total_actividades = lista.reduce((acc, e) => acc + (e.total_actividades || 0), 0)
+      const suma_puntos = lista.reduce((acc, e) => acc + (e.total_points || 0), 0)
+      const promedio_puntos = total_estudiantes > 0 ? Math.round(suma_puntos / total_estudiantes) : 0
+
+      return {
+        total_estudiantes,
+        total_historias,
+        total_actividades,
+        promedio_puntos
+      }
+    }
+
+    function calcularRanking(lista, tipo) {
+      const getMetric = (e) => {
+        switch (tipo) {
+          case 'historias':   return e.total_historias || 0
+          case 'actividades': return e.total_actividades || 0
+          case 'puntos':
+          default:            return e.total_points || 0
         }
+      }
+
+      return lista
+          .slice()
+          .sort((a, b) => getMetric(b) - getMetric(a))
+          .slice(0, 3)
+    }
+
+    function construirActividadReciente(lista) {
+      // Sin usar flatMap: aplanamos con reduce/forEach
+      const items = []
+      lista.forEach(est => {
+        (est.historias || []).forEach(hist => {
+          items.push({
+            id: `${est.id}-${hist.id}`,
+            estudiante_nombre: est.fullname,
+            tipo: 'historia_creada',
+            descripcion: `Creó la historia "${hist.title}"`,
+            puntos: hist.points || 0,
+            fecha: hist.created_at
+          })
+        })
       })
-      
-      // Ordenar por fecha más reciente y tomar las últimas 5
-      return actividades
-        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-        .slice(0, 5)
+
+      return items
+          .filter(i => i.fecha) // solo con fecha válida
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+          .slice(0, 3)
     }
-    
-    const recargarEstudiantes = async () => {
-      console.log('🔄 Recargando datos del dashboard...')
-      await cargarDatos()
+
+    const recargarEstudiantes = () => {
+      cargarDatos()
     }
-    
+
     const verDetalleEstudiante = (estudianteId) => {
       console.log(`👤 Navegando a detalle de estudiante ${estudianteId}`)
       router.push(`/estudiante/${estudianteId}`)
     }
-    
+
     const getInitials = (nombre) => {
       if (!nombre) return '??'
       return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
     }
-    
+
     const getNivelClase = (nivel) => {
       const clases = {
         'Principiante': 'nivel-principiante',
@@ -361,39 +379,45 @@ export default {
       }
       return clases[nivel] || 'nivel-principiante'
     }
-    
+
     const getRankingClass = (index) => {
       if (index === 0) return 'ranking-first'
       if (index === 1) return 'ranking-second'
       if (index === 2) return 'ranking-third'
       return ''
     }
-    
+
     const getRankingMedal = (index) => {
       const medals = ['🥇', '🥈', '🥉', '🏅', '🎖️']
       return medals[index] || '⭐'
     }
-    
+
     const getRankingValue = (estudiante) => {
       switch (tipoRanking.value) {
+        case 'historias':   return `${estudiante.total_historias || 0} historias`
+        case 'actividades': return `${estudiante.total_actividades || 0} actividades`
         case 'puntos':
-          return `${estudiante.puntos_totales || 0} puntos`
-        case 'historias':
-          return `${estudiante.total_historias || 0} historias`
-        case 'actividades':
-          return `${estudiante.total_actividades || 0} actividades`
-        default:
-          return `${estudiante.puntos_totales || 0} puntos`
+        default:            return `${estudiante.total_points || 0} puntos`
       }
     }
-    
+
     const getRankingProgress = (estudiante, index) => {
+      const metric = (e) => {
+        switch (tipoRanking.value) {
+          case 'historias':   return e.total_historias || 0
+          case 'actividades': return e.total_actividades || 0
+          case 'puntos':
+          default:            return e.total_points || 0
+        }
+      }
+
       if (index === 0) return 100
-      const maxValue = rankingEstudiantes.value[0]?.puntos_totales || 1
-      const currentValue = estudiante.puntos_totales || 0
-      return Math.max(10, (currentValue / maxValue) * 100)
+      const maxValue = rankingEstudiantes.value.length ? metric(rankingEstudiantes.value[0]) : 1
+      const currentValue = metric(estudiante)
+      if (maxValue <= 0) return 10
+      return Math.max(10, Math.round((currentValue / maxValue) * 100))
     }
-    
+
     const getActividadIcon = (tipo) => {
       const iconos = {
         'historia_completada': '📖',
@@ -404,7 +428,7 @@ export default {
       }
       return iconos[tipo] || '📝'
     }
-    
+
     const formatTimeAgo = (fechaStr) => {
       if (!fechaStr) return ''
       
@@ -413,7 +437,7 @@ export default {
       const diffMs = ahora - fecha
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
       const diffDays = Math.floor(diffHours / 24)
-      
+
       if (diffDays > 0) {
         return `hace ${diffDays} día${diffDays > 1 ? 's' : ''}`
       } else if (diffHours > 0) {
@@ -422,11 +446,11 @@ export default {
         return 'hace unos momentos'
       }
     }
-    
+
     onMounted(() => {
       cargarDatos()
     })
-    
+
     return {
       user,
       profile,

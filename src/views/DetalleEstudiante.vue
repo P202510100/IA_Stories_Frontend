@@ -229,20 +229,7 @@
                     {{ historia.preguntas_correctas || 0 }}/{{ historia.total_preguntas || 6 }} correctas
                   </span>
                 </div>
-                <div class="stat-mini">
-                  <span class="stat-icon">⏱️</span>
-                  <span class="stat-text">{{ formatTiempo(historia.tiempo_total || 0) }}</span>
-                </div>
               </div>
-            </div>
-            
-            <div class="historia-estado">
-              <span v-if="historia.completada" class="estado-badge completada">
-                ✅ Completada
-              </span>
-              <span v-else class="estado-badge pendiente">
-                ⏳ En progreso
-              </span>
             </div>
           </div>
         </div>
@@ -315,6 +302,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../components/ToastNotification.vue'
 import apiService from '../services/api'
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 export default {
   name: 'DetalleEstudiante',
@@ -328,7 +317,6 @@ export default {
     // 📊 ESTADOS REACTIVOS
     // ============================================================================
     
-    const estudiante = ref(null)
     const estadisticas = ref(null)
     const progresoTemas = ref([])
     const historias = ref([])
@@ -337,7 +325,9 @@ export default {
     const loadingHistorias = ref(false)
     const error = ref(null)
     const generandoReporte = ref(false)
-    
+
+
+
     // Filtros y ordenamiento
     const filtroTema = ref('')
     const ordenHistorias = ref('reciente')
@@ -347,7 +337,8 @@ export default {
     // ============================================================================
     
     const profile = computed(() => authStore.profile)
-    const estudianteId = computed(() => parseInt(route.params.id))
+    const estudiante = computed(() => parseInt(route.params.id))
+    const studentProfile = ref({})
     
     const nivelActual = computed(() => {
       if (!estadisticas.value?.puntos_totales) {
@@ -400,20 +391,23 @@ export default {
         if (!profile.value?.id) {
           throw new Error('No se encontró el perfil del docente')
         }
-        
-        console.log(`📊 Cargando datos del estudiante ${estudianteId.value}...`)
-        
+
+
+        const res = await apiService.getStudentByStudentId(estudiante.value)
+
+        console.log("this is responsefrom studentbystudent: ", res)
+
+        studentProfile.value = res
+
         // Cargar información detallada del estudiante desde el backend
-        const response = await apiService.obtenerDetalleEstudiante(
-          profile.value.id, 
-          estudianteId.value
-        )
-        
-        // Procesar respuesta del backend
-        estudiante.value = response.estudiante
-        estadisticas.value = response.estadisticas
-        historias.value = response.historias || []
-        progresoTemas.value = response.progreso_temas || []
+        const response = await apiService.cargarHistoriasPorAlumno(estudiante.value)
+
+        const { historias: h, estadisticas: e, progresoTemas: pt } = procesarRecords(response || [])
+        historias.value = h
+        estadisticas.value = e
+        progresoTemas.value = pt
+
+        // Si backend aún manda análisis adicional, lo usamos
         analisisRendimiento.value = response.analisis || null
         
         console.log('✅ Datos del estudiante cargados correctamente')
@@ -425,7 +419,73 @@ export default {
         loading.value = false
       }
     }
-    
+
+    function procesarRecords(records) {
+      if (!Array.isArray(records)) return { historias: [], estadisticas: {}, progresoTemas: [] }
+
+      // 1️⃣ Mapear a historias simplificadas
+      const historias = records.map(r => ({
+        id: r.id,
+        historia_id: r.story?.id,
+        titulo: r.story?.title || "Sin título",
+        tema: r.story?.topic || "desconocido",
+        created_at: r.story?.created_at || r.created_at,
+        puntos_obtenidos: r.points || 0,
+        preguntas_correctas: r.correct_answers || 0,
+        total_preguntas: r.total_questions || (r.story?.question_answer?.length || 0),
+        status: r.status
+      }))
+
+      // 2️⃣ Calcular estadísticas globales
+      const totalHistorias = historias.length
+      const historiasCompletadas = historias.filter(h => h.status === "COMPLETED").length
+      const puntosTotales = historias.reduce((acc, h) => acc + (h.puntos_obtenidos || 0), 0)
+      const promedioPuntos = totalHistorias > 0 ? puntosTotales / totalHistorias : 0
+      const totalPreguntas = historias.reduce((acc, h) => acc + (h.total_preguntas || 0), 0)
+      const correctasTotales = historias.reduce((acc, h) => acc + (h.preguntas_correctas || 0), 0)
+      const precisionPromedio = totalPreguntas > 0 ? (correctasTotales / totalPreguntas) * 100 : 0
+
+      const estadisticas = {
+        total_historias: totalHistorias,
+        historias_completadas: historiasCompletadas,
+        puntos_totales: puntosTotales,
+        promedio_puntos: promedioPuntos,
+        precision_promedio: precisionPromedio,
+        total_preguntas: totalPreguntas
+      }
+
+      // 3️⃣ Agrupar por temas
+      const progresoPorTema = Object.values(
+          historias.reduce((acc, h) => {
+            if (!acc[h.tema]) {
+              acc[h.tema] = {
+                nombre: h.tema,
+                total_historias: 0,
+                puntos_totales: 0,
+                precision_promedio: 0,
+                preguntas_correctas: 0,
+                total_preguntas: 0
+              }
+            }
+            acc[h.tema].total_historias++
+            acc[h.tema].puntos_totales += h.puntos_obtenidos || 0
+            acc[h.tema].preguntas_correctas += h.preguntas_correctas || 0
+            acc[h.tema].total_preguntas += h.total_preguntas || 0
+            return acc
+          }, {})
+      ).map(tema => ({
+        ...tema,
+        precision_promedio: tema.total_preguntas > 0
+            ? (tema.preguntas_correctas / tema.total_preguntas) * 100
+            : 0,
+        porcentaje_completado: tema.total_preguntas > 0
+            ? Math.round((tema.preguntas_correctas / tema.total_preguntas) * 100)
+            : 0
+      }))
+
+      return { historias, estadisticas, progresoTemas: progresoPorTema }
+    }
+
     const recargarDatos = () => {
       cargarDatosEstudiante()
     }
@@ -435,6 +495,7 @@ export default {
     }
     
     const verDetalleHistoria = (historiaId) => {
+      console.log("click verdetalle historia")
       router.push(`/historia/${historiaId}?modo=revision`)
     }
     
@@ -445,29 +506,72 @@ export default {
     const exportarReportePDF = async () => {
       try {
         generandoReporte.value = true
-        console.log('📄 Generando reporte PDF del estudiante...')
-        
-        const response = await apiService.exportarReporteEstudiante(
-          profile.value.id,
-          estudianteId.value
-        )
-        
-        // Crear y descargar el archivo PDF
-        const blob = new Blob([response.data], { type: 'application/pdf' })
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `reporte_${estudiante.value.nombre}_${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-        
-        toastStore.success('Reporte PDF descargado exitosamente')
-        
+        console.log("📄 Generando reporte PDF...")
+        console.log("this is response", studentProfile.value.user.fullname)
+
+        const doc = new jsPDF()
+
+        // Logo (ejemplo: un PNG en /assets/logo.png)
+        const logo = new Image()
+        logo.src = "/src/assets/iastories.png" // asegúrate que esté en tu carpeta public/assets
+        doc.addImage(logo, "PNG", 10, 10, 30, 30)
+
+        // Título
+        doc.setFontSize(18)
+        doc.text("Reporte de Rendimiento", 105, 20, { align: "center" })
+
+        doc.setFontSize(12)
+        doc.text(`Estudiante: ${studentProfile.value?.user.fullname}`, 14, 50)
+        doc.text(`Email: ${studentProfile.value?.user.email}`, 14, 58)
+        doc.text(`Edad: ${studentProfile.value?.edad || "No especificada"}`, 14, 66)
+        doc.text(`Nivel Actual: ${studentProfile.value.current_level}`, 14, 74)
+        doc.text(`Fecha: ${new Date().toLocaleDateString("es-ES")}`, 14, 82)
+
+        // 📊 Resumen de estadísticas
+        doc.setFontSize(14)
+        doc.text("Resumen de Rendimiento", 14, 100)
+
+        autoTable(doc, {
+          startY: 105,
+          head: [["Historias", "Completadas", "Puntos", "Promedio", "Precisión"]],
+          body: [[
+            estadisticas.value.total_historias || 0,
+            estadisticas.value.historias_completadas || 0,
+            estadisticas.value.puntos_totales || 0,
+            Math.round(estadisticas.value.promedio_puntos || 0),
+            `${Math.round(estadisticas.value.precision_promedio || 0)}%`
+          ]],
+          theme: "grid"
+        })
+
+        // 📖 Tabla de historias
+        doc.setFontSize(14)
+        doc.text("Detalle de Historias", 14, doc.lastAutoTable.finalY + 20)
+
+        autoTable(doc, {
+          startY: doc.lastAutoTable.finalY + 25,
+          head: [["Título", "Tema", "Fecha", "Puntos", "Correctas", "Total", "Estado"]],
+          body: historias.value.map(h => [
+            h.titulo,
+            h.tema,
+            new Date(h.created_at).toLocaleDateString("es-ES"),
+            h.puntos_obtenidos,
+            h.preguntas_correctas,
+            h.total_preguntas,
+            h.status
+          ]),
+          styles: { fontSize: 10 },
+          headStyles: { fillColor: [41, 128, 185] }, // azul corporativo
+          theme: "striped"
+        })
+
+        // Guardar
+        doc.save(`reporte_${studentProfile.value.user.fullname}_${new Date().toISOString().split("T")[0]}.pdf`)
+
+        toastStore.success("Reporte PDF generado exitosamente")
       } catch (error) {
-        console.error('❌ Error generando reporte:', error)
-        toastStore.error('Error al generar el reporte PDF')
+        console.error("❌ Error generando PDF:", error)
+        toastStore.error("Error al generar el PDF")
       } finally {
         generandoReporte.value = false
       }
@@ -479,7 +583,7 @@ export default {
     }
     
     const compararConClase = () => {
-      router.push(`/dashboard-docente?tab=comparacion&estudiante=${estudianteId.value}`)
+      router.push(`/dashboard-docente?tab=comparacion&estudiante=${estudiante.value}`)
     }
     
     const asignarTareaPersonalizada = () => {
@@ -609,15 +713,15 @@ export default {
     // ============================================================================
     
     onMounted(() => {
-      console.log('🏠 Iniciando DetalleEstudiante para ID:', estudianteId.value)
-      
+      console.log('🏠 Iniciando DetalleEstudiante para ID:', estudiante.value)
+
       // Verificar autenticación
       if (!authStore.isAuthenticated || !authStore.isDocente) {
         console.error('❌ Acceso no autorizado')
         router.push('/login')
         return
       }
-      
+
       cargarDatosEstudiante()
     })
     
@@ -626,7 +730,7 @@ export default {
     // ============================================================================
     
     watch(() => route.params.id, (newId) => {
-      if (newId && newId !== estudianteId.value) {
+      if (newId && newId !== estudiante.value) {
         cargarDatosEstudiante()
       }
     })
