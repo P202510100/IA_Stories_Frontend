@@ -157,6 +157,13 @@
               <button @click="crearNuevaHistoria" class="btn btn-secondary">
                 ✨ Crear Nueva Historia
               </button>
+              <button
+                  @click="confirmarReinicio"
+                  class="btn btn-danger"
+                  :disabled="historia.has_restarted"
+              >
+                🔄 Reiniciar Examen
+              </button>
             </div>
           </div>
         </div>
@@ -201,6 +208,7 @@ import {computed, onMounted, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useAuthStore} from '../stores/auth'
 import api from "@/services/api.js";
+import apiService from "@/services/api.js";
 
 export default {
   name: 'VerHistoria',
@@ -322,6 +330,99 @@ export default {
       await cargarHistoriaCompleta()
     })
 
+
+    async function confirmarReinicio() {
+      if (historia.value.has_restarted) {
+        alert("⚠️ Ya usaste tu único reinicio para este examen.");
+        return;
+      }
+
+      const confirmar = confirm(
+          "⚠️ Estás a punto de reiniciar este examen.\n" +
+          "Esto eliminará todas tus respuestas actuales y solo puedes hacerlo una vez.\n\n" +
+          "¿Deseas continuar?"
+      );
+
+      if (confirmar) {
+        await reiniciarExamen();
+      }
+    }
+
+    function safeParseQuestions(q) {
+      try {
+        if (!q) return [];
+        if (Array.isArray(q)) return q;
+        if (typeof q === 'string') return JSON.parse(q);
+        return [];
+      } catch {
+        return [];
+      }
+    }
+
+    function resolveCorrectIndex(q, opciones) {
+      // Posibles llaves que tu backend puede usar
+      let rc = q.respuesta_correcta ?? q.answer ?? q.correct ?? q.correct_index ?? q.correctOption ?? 0;
+
+      // Si ya es número (o string numérica), conviértelo a entero
+      if (typeof rc === 'number' || (typeof rc === 'string' && /^\d+$/.test(rc))) {
+        const n = Number(rc);
+        return Number.isInteger(n) && n >= 0 && n < opciones.length ? n : 0;
+      }
+
+      // Si viene como texto de la opción correcta
+      if (typeof rc === 'string') {
+        const needle = rc.trim().toLowerCase();
+        const idx = opciones.findIndex(o => String(o).trim().toLowerCase() === needle);
+        return idx >= 0 ? idx : 0;
+      }
+
+      // Cualquier otro caso: 0 por defecto
+      return 0;
+    }
+
+    function normalizeQuestions(raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.map((q, i) => {
+        const opciones = q.opciones || q.options || q.alternativas || [];
+        const respuesta_correcta = resolveCorrectIndex(q, opciones);
+        return {
+          id: i,
+          pregunta: q.pregunta || q.question || q.texto || q.text || `Pregunta ${i + 1}`,
+          opciones,
+          respuesta_correcta,
+          tipo_respuesta: Array.isArray(opciones) && opciones.length > 0 ? 'opcion_multiple' : 'texto',
+          respondida: false,
+          correcta: null,
+          respuesta_alumno: null,
+          respuesta_texto: '',
+          puntos_obtenidos: 0,
+          explicacion: q.explicacion || q.explanation || '',
+          puede_repetir: true,
+          tipo: q.tipo || q.type || 'inferencial'
+        };
+      });
+    }
+
+    async function reiniciarExamen() {
+      try {
+        saving.value = true;
+        const updated = await api.reiniciarExamen(historia.value.id);
+
+        // actualizar estado local
+        historia.value.status = updated.status;
+        historia.value.has_restarted = updated.has_restarted;
+        preguntas.value = []; // limpiar preguntas para que se recarguen
+
+        alert("✅ Examen reiniciado. Puedes volver a responderlo desde cero.");
+        await recargarHistoria();
+      } catch (err) {
+        console.error("❌ Error reiniciando examen:", err);
+        alert("❌ No se pudo reiniciar el examen.");
+      } finally {
+        saving.value = false;
+      }
+    }
+
     async function cargarHistoriaCompleta() {
       loading.value = true
       error.value = null
@@ -341,6 +442,7 @@ export default {
           correctas: response.correct_answers,
           completado: response.completed_at,
           total_preguntas: response.total_questions,
+          has_restarted: response.has_restarted || false,
           // mapeamos story
           titulo: response.story?.title || '',
           contenido: response.story?.content || '',
@@ -359,21 +461,7 @@ export default {
         const answersBackend = Array.isArray(response.answers) ? response.answers : [];
 
         // 🔥 Mapear preguntas
-        preguntas.value = preguntasBackend.map((q, index) => ({
-          id: index,
-          pregunta: q.question,
-          opciones: q.options || [],
-          respuesta_correcta: q.answer,
-          tipo_respuesta: q.options && q.options.length > 0 ? 'opcion_multiple' : 'texto',
-          respondida: false,
-          correcta: null,
-          respuesta_alumno: null,
-          respuesta_texto: '',
-          puntos_obtenidos: 0,
-          explicacion: null,
-          puede_repetir: true,
-          tipo: 'inferencial'
-        }));
+        preguntas.value = normalizeQuestions(preguntasBackend);
 
         // 🔄 Aplicar respuestas guardadas
         answersBackend.forEach(ans => {
@@ -488,7 +576,7 @@ export default {
         year: 'numeric'
       })
     }
-    return { saving, guardarProgreso, finalizarExamen, historia, preguntas, loading, loadingPreguntas, error, profile, personajes, preguntasRespondidas, todasPreguntasRespondidas, puntosObtenidos, recargarHistoria, responderPregunta, responderPreguntaTexto, repetirPregunta, volverAtras, verOtraHistoria, crearNuevaHistoria, getTemaLabel, getTipoPreguntaLabel, getParrafos, formatDate }
+    return { confirmarReinicio, saving, guardarProgreso, finalizarExamen, historia, preguntas, loading, loadingPreguntas, error, profile, personajes, preguntasRespondidas, todasPreguntasRespondidas, puntosObtenidos, recargarHistoria, responderPregunta, responderPreguntaTexto, repetirPregunta, volverAtras, verOtraHistoria, crearNuevaHistoria, getTemaLabel, getTipoPreguntaLabel, getParrafos, formatDate }
   }
 }
 </script>

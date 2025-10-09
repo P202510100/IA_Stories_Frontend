@@ -147,6 +147,13 @@ const apiService = {
       return response.data
   },
 
+  async reiniciarExamen(recordId) {
+      const response = await api.post(`/records/${recordId}/restart`)
+
+      return response.data
+  },
+
+
   async actualizarRecord(recordId, payload) {
       const response = await api.patch(`/records/${recordId}`, payload)
 

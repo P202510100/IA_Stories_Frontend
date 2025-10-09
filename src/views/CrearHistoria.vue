@@ -335,24 +335,40 @@ export default {
       mostrarErrorGenerico.value = false
       mostrarErrorTemaLibre.value = false
     }
+    function resolveCorrectIndex(q, opciones) {
+      let rc = q.respuesta_correcta ?? q.answer ?? q.correct ?? q.correct_index ?? q.correctOption ?? 0;
 
-    // Normalizar preguntas que lleguen en distintos formatos
-    function mapQuestions(rawQuestions) {
-      if (!Array.isArray(rawQuestions)) return []
-      return rawQuestions.map((q, idx) => {
-        const opciones = q.opciones || q.options || q.alternativas || []
-        const respuestaCorrecta = q.respuesta_correcta ?? q.answer ?? q.correct ?? q.correct_index ?? 0
+      if (typeof rc === 'number' || (typeof rc === 'string' && /^\d+$/.test(rc))) {
+        const n = Number(rc);
+        return Number.isInteger(n) && n >= 0 && n < opciones.length ? n : 0;
+      }
+
+      if (typeof rc === 'string') {
+        const needle = rc.trim().toLowerCase();
+        const idx = opciones.findIndex(o => String(o).trim().toLowerCase() === needle);
+        return idx >= 0 ? idx : 0;
+      }
+
+      return 0;
+    }
+
+    function normalizeQuestions(raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.map((q, i) => {
+        const opciones = q.opciones || q.options || q.alternativas || [];
+        const respuesta_correcta = resolveCorrectIndex(q, opciones);
 
         return {
-          id: idx,  // 👈 0-based siempre
-          pregunta: q.pregunta || q.question || q.texto || q.text || 'Pregunta',
-          opciones: opciones,
-          respuesta_correcta: typeof respuestaCorrecta === 'number' ? respuestaCorrecta : 0,
+          id: i,
+          pregunta: q.pregunta || q.question || q.texto || q.text || `Pregunta ${i + 1}`,
+          opciones,
+          respuesta_correcta,
           explicacion: q.explicacion || q.explanation || '',
           tipo: q.tipo || q.type || 'inferencial'
-        }
-      })
+        };
+      });
     }
+
 
     async function crearHistoria() {
       mostrarErrorGenerico.value = false
@@ -422,7 +438,7 @@ export default {
           rawQuestions = []
         }
 
-        normalized.questions = mapQuestions(rawQuestions)
+        normalized.questions = normalizeQuestions(rawQuestions)
 
         // guardar en estado
         historiaGenerada.value = {
