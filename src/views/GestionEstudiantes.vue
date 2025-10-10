@@ -193,7 +193,7 @@
 
             <div class="tarjeta-info">
               <h3>{{ estudiante.nombre }}</h3>
-              <p class="estudiante-email">{{ estudiante.id }}</p>
+              <p class="estudiante-email">{{ estudiante.email }}</p>
 
 
             </div>
@@ -295,62 +295,6 @@
                 </button>
               </div>
             </form>
-          </div>
-
-          <!-- Código de clase -->
-          <div v-if="tabInvitacion === 'codigo'" class="invite-content">
-            <div class="codigo-clase-section">
-              <div class="codigo-display">
-                <h4>Tu código de clase:</h4>
-                <div class="codigo-valor">
-                  <span class="codigo-texto">{{ codigoClase }}</span>
-                  <button @click="copiarCodigo" class="btn-copiar" :class="{ copiado: codigoCopiado }">
-                    {{ codigoCopiado ? '✅' : '📋' }}
-                  </button>
-                </div>
-              </div>
-
-              <div class="codigo-instrucciones">
-                <h4>Instrucciones para estudiantes:</h4>
-                <ol>
-                  <li>Regístrate en IaStories como estudiante</li>
-                  <li>Ve a "Unirse a Clase"</li>
-                  <li>Ingresa el código: <strong>{{ codigoClase }}</strong></li>
-                  <li>¡Listo! Aparecerás en tu lista de estudiantes</li>
-                </ol>
-              </div>
-
-              <div class="codigo-acciones">
-                <button @click="generarNuevoCodigo" class="btn btn-secondary">
-                  🔄 Generar Nuevo Código
-                </button>
-                <button @click="compartirCodigo" class="btn btn-primary">
-                  📱 Compartir Código
-                </button>
-              </div>
-            </div>
-
-            <div class="estudiante-actions">
-              <button
-                v-if="!estudiante.esta_asignado"
-                @click="asignarEstudiante(estudiante)"
-                class="btn-asignar"
-                :disabled="asignandoEstudiante === estudiante.id"
-              >
-                <span v-if="asignandoEstudiante === estudiante.id">⏳</span>
-                <span v-else>➕ Asignar</span>
-              </button>
-
-              <button
-                v-else
-                @click="desasignarEstudiante(estudiante)"
-                class="btn-desasignar"
-                :disabled="desasignandoEstudiante === estudiante.id"
-              >
-                <span v-if="desasignandoEstudiante === estudiante.id">⏳</span>
-                <span v-else>➖ Quitar</span>
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -637,21 +581,24 @@ export default {
       if (!estudianteADesvincular.value) return
       
       desvinculando.value = true
-      
+      console.log('this is student: ', estudiante.id)
+      console.log('this is teacher: ', user.value.teacher_profile.id)
       try {
-        // TODO: Llamar API real
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // Remover de la lista local
+        await apiService.unenrollStudent(
+            user.value.teacher_profile.id,
+            estudianteADesvincular.value.id
+        )
+
+        // actualizar estado local
         const index = estudiantes.value.findIndex(e => e.id === estudianteADesvincular.value.id)
         if (index > -1) {
-          estudiantes.value.splice(index, 1)
+          estudiantes.value[index].matriculado = false
         }
-        
-        toastStore.success(`${estudianteADesvincular.value.nombre} ha sido desvinculado de tu clase`)
+
+        toastStore.success(`${estudianteADesvincular.value.nombre} ha sido desmatriculado`)
         mostrarModalDesvinculacion.value = false
         estudianteADesvincular.value = null
-        
+
       } catch (err) {
         toastStore.error('Error al desvincular el estudiante')
       } finally {
@@ -679,37 +626,6 @@ export default {
       }
     }
 
-    const copiarCodigo = async () => {
-      try {
-        await navigator.clipboard.writeText(codigoClase.value)
-        codigoCopiado.value = true
-        toastStore.success('Código copiado al portapapeles')
-
-        setTimeout(() => {
-          codigoCopiado.value = false
-        }, 2000)
-      } catch (err) {
-        toastStore.error('Error al copiar el código')
-      }
-    }
-    
-    const generarNuevoCodigo = () => {
-      codigoClase.value = Math.random().toString(36).substr(2, 6).toUpperCase()
-      toastStore.success('Nuevo código generado')
-    }
-    
-    const compartirCodigo = () => {
-      const texto = `¡Únete a mi clase en IaStories! Usa el código: ${codigoClase.value}`
-      
-      if (navigator.share) {
-        navigator.share({
-          title: 'Código de clase - IaStories',
-          text: texto
-        })
-      } else {
-        copiarCodigo()
-      }
-    }
     
 
     const volverAtras = () => {
@@ -758,27 +674,8 @@ export default {
 }
 
 const asignarEstudiante = async (estudiante) => {
-  try {
-    asignandoEstudiante.value = estudiante.id
-    console.log(`➕ Asignando estudiante ${estudiante.nombre} a la clase...`)
-    
-    await apiService.asociarEstudiante(authStore.profile.id, estudiante.user_id || estudiante.id)
-    
-    const index = todosLosEstudiantes.value.findIndex(e => e.id === estudiante.id)
-    if (index !== -1) {
-      todosLosEstudiantes.value[index].esta_asignado = true
-    }
-    
-    await cargarEstudiantes()
-    
-    toastStore.success(`✅ ${estudiante.nombre} fue asignado a tu clase`)
-    
-  } catch (error) {
-    console.error('❌ Error asignando estudiante:', error)
-    toastStore.error(`Error al asignar a ${estudiante.nombre}`)
-  } finally {
-    asignandoEstudiante.value = null
-  }
+  console.log('this is student: ', estudiante.id)
+  console.log('this is teacher: ', user.value.teacher_profile.id)
 }
 
 const desasignarEstudiante = async (estudiante) => {
@@ -869,9 +766,6 @@ const refrescarEstudiantes = () => {
       confirmarDesvinculacion,
       desvincularEstudiante,
       enviarInvitacion,
-      copiarCodigo,
-      generarNuevoCodigo,
-      compartirCodigo,
       volverAtras,
       cargarTodosLosEstudiantes,
       asignarEstudiante,

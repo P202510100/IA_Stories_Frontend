@@ -1,4 +1,3 @@
-
 <template>
   <div class="mis-historias">
     <div class="container">
@@ -72,7 +71,7 @@
           <div class="stat-item">
             <div class="stat-icon">🎯</div>
             <div class="stat-info">
-              <div class="stat-number">{{ Math.round(estadisticas.promedio_respuestas || 0) }}%</div>
+              <div class="stat-number">{{ estadisticas.promedio_respuestas || 0 }}%</div>
               <div class="stat-label">Precisión</div>
             </div>
           </div>
@@ -125,9 +124,9 @@
                   <span class="stat-icon">⭐</span>
                   <span class="stat-text">{{ historia.puntos_obtenidos }} puntos</span>
                 </div>
-                <div v-if="historia.preguntas_completadas !== undefined" class="stat">
+                <div v-if="historia.respondidas !== undefined" class="stat">
                   <span class="stat-icon">🎯</span>
-                  <span class="stat-text">{{ historia.preguntas_completadas }}/{{ historia.total_preguntas || 6 }} preguntas</span>
+                  <span class="stat-text">{{ historia.respondidas }}/{{ historia.total_preguntas }} preguntas</span>
                 </div>
               </div>
 
@@ -143,17 +142,21 @@
                   {{ getProgressPercent(historia) }}% completado
                 </span>
               </div>
+
             </div>
 
             <!-- Footer de la card -->
             <div class="card-footer">
-              <button class="btn-accion primario">
-                <span v-if="historia.preguntas_completadas === historia.total_preguntas">📖 Releer</span>
+              <button class="btn-accion primario" :class="{ completado: historia.status === 'COMPLETED' }">
+                <span v-if="historia.status === 'COMPLETED'">📖 Revisar</span>
                 <span v-else>🎯 Continuar</span>
               </button>
               <button @click.stop="compartirHistoria(historia)" class="btn-accion secundario">
                 📤 Compartir
               </button>
+              <div v-if="historia.status === 'COMPLETED'" class="etiqueta-completado">
+                ✅ Completado
+              </div>
             </div>
           </div>
         </div>
@@ -211,6 +214,8 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from "@/services/api.js";
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 export default {
   name: 'MisHistorias',
@@ -347,19 +352,31 @@ export default {
 
         console.log('this is response from cargarhistoriasporalumno: ', response)
 
-        historias.value = response.map(record => ({
-          id: record.story.id,
-          titulo: record.story.title,
-          contenido: record.story.content,
-          tema: record.story.topic,
-          created_at: record.story.created_at,
-          preguntas_completas: record.correct_answers,
-          total_preguntas: record.total_questions,
-          puntos_obtenidos: record.points,
-          status: record.status,
-          palabras: record.story.content ? record.story.content.split(' ').length : 0,
-          recorId: record.id
-        }))
+        historias.value = response.map(record => {
+          let respondidas = 0
+
+          if (record.status === 'COMPLETED') {
+            // Si está finalizado, todas fueron respondidas
+            respondidas = record.total_questions ?? 0
+          } else if (record.status === 'IN_PROGRESS') {
+            // Solo contamos las correctas guardadas (y opcionalmente también incorrectas si las guardas en otro campo)
+            respondidas = record.correct_answers ?? 0
+          }
+          return {
+            id: record.story.id,
+            titulo: record.story.title,
+            contenido: record.story.content,
+            tema: record.story.topic,
+            created_at: record.story.created_at,
+            correctas: record.correct_answers ?? 0,
+            total_preguntas: record.total_questions ?? 6,
+            respondidas, // 👈 calculo aquí
+            puntos_obtenidos: record.points,
+            status: record.status,
+            palabras: record.story.content ? record.story.content.split(' ').length : 0,
+            recorId: record.id
+          }
+        })
 
         console.log('this is response from historiasgeneradas: ', historias)
 
@@ -382,13 +399,19 @@ export default {
       try {
         const totalHistorias = historias.value.length
         const puntosTotales = historias.value.reduce((sum, h) => sum + (h.puntos_obtenidos || 0), 0)
-        const totalPreguntas = historias.value.reduce((sum, h) => sum + (h.total_preguntas || 0), 0)
-        const totalCorrectas = historias.value.reduce((sum, h) => sum + (h.preguntas_completadas || 0), 0)
+        const totalPreguntas = historias.value.reduce((sum, h) => sum + (h.correctas || 0), 0)
+        const totalCorrectas = historias.value.reduce((sum, h) => sum + (h.total_preguntas || 0), 0)
+
+
+        console.log('this is total historias: ', totalHistorias)
+        console.log('this is puntos totales: ', puntosTotales)
+        console.log('this is total preguntas: ', totalPreguntas)
+        console.log('this is total correctas: ', totalCorrectas)
 
         estadisticas.value = {
           total_historias: totalHistorias,
           puntos_totales: puntosTotales,
-          promedio_respuestas: totalPreguntas > 0 ? (totalCorrectas / totalPreguntas) * 100 : 0,
+          promedio_respuestas: totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0,
           nivel_actual: { nombre: 'Principiante' } // luego puedes calcular niveles
         }
       } catch (err) {
@@ -412,16 +435,33 @@ export default {
 
     async function exportarHistorial() {
       loadingExport.value = true
-
       try {
-        console.log('📄 Exportando historial a PDF...')
+        const doc = new jsPDF()
 
+        doc.setFontSize(18)
+        doc.text("Historial de Historias", 14, 20)
 
-        console.log('✅ PDF exportado exitosamente')
+        const rows = historias.value.map((h, i) => [
+          i + 1,
+          h.titulo,
+          getTemaLabel(h.tema),
+          formatDate(h.created_at),
+          `${h.respondidas}/${h.total_preguntas}`,
+          h.puntos_obtenidos ?? 0,
+          `${getProgressPercent(h)}%`
+        ])
+
+        autoTable(doc, {
+          head: [["#", "Título", "Tema", "Fecha", "Preguntas", "Puntos", "Progreso"]],
+          body: rows,
+          startY: 30,
+        })
+
+        doc.save("mis_historias.pdf")
 
       } catch (err) {
-        console.error('❌ Error exportando PDF:', err)
-        error.value = 'Error exportando el historial'
+        console.error("❌ Error exportando PDF:", err)
+        error.value = "Error exportando el historial"
       } finally {
         loadingExport.value = false
       }
@@ -494,22 +534,6 @@ export default {
       const date = new Date(dateString)
       if (isNaN(date.getTime())) return ''
 
-      const now = new Date()
-      const diffTime = now.getTime() - date.getTime()
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-      if (diffDays < 0) {
-        // fecha en el futuro: mostrar fecha exacta
-        return date.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        })
-      }
-      if (diffDays === 0) return 'Hoy'
-      if (diffDays === 1) return 'Ayer'
-      if (diffDays < 7) return `Hace ${diffDays} días`
-
       return date.toLocaleDateString('es-ES', {
         day: 'numeric',
         month: 'short',
@@ -517,9 +541,9 @@ export default {
       })
     }
     function getProgressPercent(historia) {
-      const done = Number(historia.preguntas_completadas ?? historia.preguntas_completas ?? 0)
+      const done = Number(historia.respondidas ?? 0)
       const total = Number(historia.total_preguntas ?? 0)
-      if (!total || total <= 0) return 0
+      if (!total) return 0
       return Math.round((done / total) * 100)
     }
 
@@ -565,6 +589,19 @@ export default {
 </script>
 
 <style scoped>
+.completado {
+  background-color: #4caf50;
+  color: white;
+}
+.etiqueta-completado {
+  background: #4caf50;
+  color: white;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-top: 5px;
+  display: inline-block;
+}
 .mis-historias {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

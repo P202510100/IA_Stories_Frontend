@@ -41,6 +41,12 @@ const apiService = {
       return response.data
   },
 
+  async unenrollStudent(teacherId, studentId) {
+      const response = await api.delete(`/enrollments/${teacherId}/${studentId}`)
+
+      return response.data
+  },
+
   async register(userData) {
     const response = await api.post('/api/v1/auth/register', userData)
     return response.data
@@ -140,6 +146,13 @@ const apiService = {
 
       return response.data
   },
+
+  async reiniciarExamen(recordId) {
+      const response = await api.post(`/records/${recordId}/restart`)
+
+      return response.data
+  },
+
 
   async actualizarRecord(recordId, payload) {
       const response = await api.patch(`/api/v1/records/${recordId}`, payload)
