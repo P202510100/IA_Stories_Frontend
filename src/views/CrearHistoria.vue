@@ -98,15 +98,30 @@
         </form>
       </div>
 
-      <!-- Loading de generación -->
+      <!-- Loading de generación mejorado -->
       <div v-if="generando" class="loading-historia">
         <div class="loading-animation">
           <div class="loading-circle"></div>
           <div class="loading-circle"></div>
           <div class="loading-circle"></div>
         </div>
-        <h3>🤖 La IA está creando tu historia...</h3>
-        <p>Esto puede tomar unos segundos</p>
+
+        <h3>{{ loadingTitulo }}</h3>
+        <p class="tiempo-estimado">{{ loadingSubtitulo }}</p>
+
+        <ul class="loading-steps">
+          <li v-for="(step, index) in loadingSteps" :key="index"
+              :class="{
+          completado: index < loadingPaso,
+          activo: index === loadingPaso,
+          pendiente: index > loadingPaso
+          }">
+            <span class="icono-step">
+              {{ index < loadingPaso ? '✅' : index === loadingPaso ? '⚙️' : '⏳' }}
+            </span>
+            {{ step }}
+          </li>
+        </ul>
       </div>
 
       <!-- Historia generada -->
@@ -408,75 +423,95 @@ export default {
       });
     }
 
+    // 🔧 Estados de loading IA
+    const loadingSteps = [
+      "Analizando perfil del estudiante",
+      "Escribiendo historia educativa",
+      "Generando ilustración con Freepik",
+      "Guardando historia en la base de datos"
+    ];
+    const loadingPaso = ref(0);
+    const loadingTitulo = ref("🤖 Preparando generación...");
+    const loadingSubtitulo = ref("Esto puede tardar entre 20 y 40 segundos");
+
+    const actualizarPaso = (titulo, paso) => {
+      loadingTitulo.value = titulo;
+      loadingPaso.value = paso;
+    };
 
     async function crearHistoria() {
-      mostrarErrorGenerico.value = false
-      mostrarErrorTemaLibre.value = false
-      error.value = null
+      mostrarErrorGenerico.value = false;
+      mostrarErrorTemaLibre.value = false;
+      error.value = null;
 
-      // --- Validación general de campos obligatorios ---
+      // Validaciones
       if (!formData.value.tema) {
-        error.value = 'Por favor selecciona un tema'
-        mostrarErrorGenerico.value = true
-        return
+        error.value = "Por favor selecciona un tema";
+        mostrarErrorGenerico.value = true;
+        return;
       }
-
-      if (temaSeleccionadoEsLibre.value && (!formData.value.tema_libre || !formData.value.tema_libre.trim())) {
-        error.value = 'Por favor escribe el tema libre'
-        mostrarErrorTemaLibre.value = true
-        return
+      if (temaSeleccionadoEsLibre.value && !formData.value.tema_libre.trim()) {
+        error.value = "Por favor escribe el tema libre";
+        mostrarErrorTemaLibre.value = true;
+        return;
       }
-
-      if (!formData.value.nombre_protagonista || !formData.value.nombre_protagonista.trim()) {
-        error.value = 'Por favor ingresa el nombre del protagonista'
-        return
+      if (!formData.value.nombre_protagonista.trim()) {
+        error.value = "Por favor ingresa el nombre del protagonista";
+        return;
       }
-
       if (!formData.value.edad_protagonista) {
-        error.value = 'Por favor selecciona la edad del protagonista'
-        return
+        error.value = "Por favor selecciona la edad del protagonista";
+        return;
+      }
+      if (!formData.value.elementos.trim()) {
+        error.value = "Por favor escribe al menos un elemento especial";
+        return;
       }
 
-      if (!formData.value.elementos || !formData.value.elementos.trim()) {
-        error.value = 'Por favor escribe al menos un elemento especial'
-        return
-      }
-
-      // --- Validación de usuario autenticado ---
-      const usuarioActual = authStore.user || authStore.profile
+      const usuarioActual = authStore.user || authStore.profile;
       if (!usuarioActual?.id) {
-        error.value = 'No se pudo identificar al usuario. Inicia sesión nuevamente.'
-        return
+        error.value = "No se pudo identificar al usuario. Inicia sesión nuevamente.";
+        return;
       }
-      const alumnoId = usuarioActual.alumno_id || usuarioActual.id
 
-      generando.value = true
-
-      // --- Preparar payload ---
+      const alumnoId = usuarioActual.alumno_id || usuarioActual.id;
       const temaFinal = temaSeleccionadoEsLibre.value
           ? formData.value.tema_libre.trim()
-          : formData.value.tema
+          : formData.value.tema;
 
       const payload = {
         user_id: alumnoId,
         topic: temaFinal,
         elementos: formData.value.elementos,
         nombre: formData.value.nombre_protagonista,
-        edad: formData.value.edad_protagonista,
-        grado: usuarioActual.student_profile.current_grade
-      }
+        edad: formData.value.edad_protagonista
+      };
 
-      console.log('Payload enviado:', payload)
+      generando.value = true;
+      loadingPaso.value = 0;
+      loadingTitulo.value = "🤖 Iniciando generación de historia...";
+      loadingSubtitulo.value = "Esto puede tardar entre 20 y 40 segundos";
 
       try {
-        const data = await apiService.generarHistoria(payload)
-        console.log("Historia generada:", data)
+        // Simulación de fases progresivas
+        actualizarPaso("🧠 Analizando perfil del estudiante...", 0);
+        await new Promise((r) => setTimeout(r, 1500));
 
+        actualizarPaso("✍️ Escribiendo historia educativa...", 1);
+        await new Promise((r) => setTimeout(r, 2500));
+
+        const data = await apiService.generarHistoria(payload);
+        console.log("✅ Historia generada:", data);
+
+        actualizarPaso("🎨 Generando ilustración...", 2);
+        await new Promise((r) => setTimeout(r, 2000));
+
+        // Procesar respuesta IA
         const normalized = {
           titulo: data.title,
           contenido: data.content,
           tema: data.topic,
-          question_answer: data.question_answer,
+          question_answer: data.question_answer || data.questions,
           story_metadata: data.story_metadata,
           personajes: Array.isArray(data.characters)
               ? data.characters
@@ -484,27 +519,31 @@ export default {
           record_id: data.record_id,
           created_at: data.created_at,
           image_b64: data.image_b64
-        }
+        };
 
-        const rawQuestions = Array.isArray(data.question_answer)
-            ? data.question_answer
-            : tryParseJSON(data.question_answer)
+        const rawQuestions = Array.isArray(normalized.question_answer)
+            ? normalized.question_answer
+            : tryParseJSON(normalized.question_answer);
 
-        normalized.questions = normalizeQuestions(rawQuestions)
+        normalized.questions = normalizeQuestions(rawQuestions);
         historiaGenerada.value = {
           ...normalized,
           palabras: normalized.contenido
               ? normalized.contenido.split(/\s+/).length
               : 0
-        }
+        };
+
+        actualizarPaso("💾 Guardando historia completada...", 3);
+        await new Promise((r) => setTimeout(r, 800));
       } catch (err) {
-        console.error('Error generando historia:', err)
+        console.error("❌ Error generando historia:", err);
         error.value =
             err.response?.data?.detail ||
             err.response?.data?.message ||
-            'Ocurrió un error al generar la historia'
+            "Ocurrió un error al generar la historia.";
       } finally {
-        generando.value = false
+        generando.value = false;
+        loadingPaso.value = 0;
       }
     }
 
@@ -715,7 +754,12 @@ export default {
       temaFinalPresente,
       manejarCambioTema,
       temaLibreActivo,
-      formularioCompleto
+      formularioCompleto,
+      loadingSteps,
+      actualizarPaso,
+      loadingPaso,
+      loadingSubtitulo,
+      loadingTitulo
 
     }
   }
@@ -723,6 +767,70 @@ export default {
 </script>
 
 <style scoped>
+
+.loading-historia {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.loading-animation {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.loading-circle {
+  width: 1rem;
+  height: 1rem;
+  margin: 0 0.4rem;
+  border-radius: 50%;
+  background-color: #6b73ff;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.loading-circle:nth-child(2) { animation-delay: 0.2s; }
+.loading-circle:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.loading-steps {
+  list-style: none;
+  padding: 0;
+  margin-top: 1.5rem;
+  text-align: left;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.loading-steps li {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+}
+
+.loading-steps li span.icono-step {
+  margin-right: 0.6rem;
+}
+
+.loading-steps li.activo {
+  font-weight: bold;
+  color: #4f46e5;
+}
+
+.loading-steps li.completado {
+  color: #22c55e;
+}
+
+.loading-steps li.pendiente {
+  color: #999;
+}
+
+
 .error-message {
   background: #ffe6e6;
   color: #d9534f;

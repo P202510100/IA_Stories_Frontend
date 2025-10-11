@@ -1,4 +1,3 @@
-
 <template>
   <div class="profile-container">
     <div class="container">
@@ -644,13 +643,24 @@ export default {
           
           formDataOriginal.value = { ...formData.value }
         }
-        
+
         // Cargar intereses si es alumno
-        if (isAlumno.value && profile.value?.id) {
+        if (isAlumno.value && profile.value) {
           try {
-            const interesesResponse = await apiService.obtenerInteresesAlumno(profile.value.id)
-            interesesSeleccionados.value = interesesResponse.intereses || []
-            interesesOriginales.value = [...interesesSeleccionados.value]
+            let intereses = []
+
+            // 🧩 1️⃣ Prioridad: si el perfil tiene intereses (cadena CSV)
+            if (profile.value.interests) {
+              intereses = profile.value.interests
+                  .split(',')
+                  .map(i => i.trim())
+                  .filter(i => i.length > 0)
+            }
+
+            interesesSeleccionados.value = intereses
+            interesesOriginales.value = [...intereses]
+            console.log('✅ Intereses inicializados:', intereses)
+
           } catch (err) {
             console.warn('⚠️ No se pudieron cargar los intereses:', err)
             interesesSeleccionados.value = []
@@ -660,25 +670,25 @@ export default {
         
         // Cargar configuraciones desde el backend
         try {
-  const configsGuardadas = localStorage.getItem(`configuraciones_${user.value.id}`)
-  if (configsGuardadas) {
-    configuraciones.value = {
-      ...configuraciones.value,
-      ...JSON.parse(configsGuardadas)
-    }
-  }
-} catch (err) {
-  console.warn('⚠️ No se pudieron cargar las configuraciones locales:', err)
-}
+          const configsGuardadas = localStorage.getItem(`configuraciones_${user.value.id}`)
+          if (configsGuardadas) {
+            configuraciones.value = {
+              ...configuraciones.value,
+              ...JSON.parse(configsGuardadas)
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ No se pudieron cargar las configuraciones locales:', err)
+        }
         
         console.log('✅ Datos del perfil cargados correctamente')
         
-      } catch (err) {
-        console.error('❌ Error cargando perfil:', err)
-        error.value = 'Error al cargar la información del perfil'
-      } finally {
-        loading.value = false
-      }
+        } catch (err) {
+          console.error('❌ Error cargando perfil:', err)
+          error.value = 'Error al cargar la información del perfil'
+        } finally {
+          loading.value = false
+        }
     }
     
     const volverDashboard = () => {
@@ -781,20 +791,28 @@ export default {
       try {
         guardandoIntereses.value = true
         error.value = ''
-        
+
         console.log('🎯 Guardando intereses...')
-        
+
+        // Enviar como array al backend
         const response = await apiService.actualizarInteresesAlumno(
-          profile.value.id,
-          interesesSeleccionados.value
+            profile.value.id,
+            interesesSeleccionados.value
         )
-        
+
         interesesOriginales.value = [...interesesSeleccionados.value]
         editandoIntereses.value = false
-        
+
         toastStore.success('Intereses actualizados correctamente')
-        console.log('✅ Intereses guardados')
-        
+        authStore.updateProfile({
+          ...authStore.user,
+          student_profile: {
+            ...authStore.user.student_profile,
+            interests: interesesSeleccionados.value.join(',')
+          }
+        })
+        console.log('✅ Intereses guardados', response)
+
       } catch (err) {
         console.error('❌ Error guardando intereses:', err)
         error.value = err.response?.data?.error || 'Error al guardar los intereses'
@@ -838,7 +856,7 @@ export default {
         
         console.log('🔐 Cambiando contraseña...')
         
-        const response = await apiService.cambiarPassword({
+        const response = await apiService.changePassword({
           user_id: user.value.id,
           current_password: passwordData.value.current,
           new_password: passwordData.value.new
@@ -848,7 +866,7 @@ export default {
         passwordData.value = { current: '', new: '', confirm: '' }
         
         toastStore.success('Contraseña cambiada correctamente')
-        console.log('✅ Contraseña actualizada')
+        console.log('✅ Contraseña actualizada', response)
         
       } catch (err) {
         console.error('❌ Error cambiando contraseña:', err)

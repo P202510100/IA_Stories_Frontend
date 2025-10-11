@@ -191,11 +191,30 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function updateProfile(updatedUser) {
-      user.value = updatedUser
+      if (!user.value) {
+          user.value = updatedUser
+      } else {
+          // 🔁 Fusionar perfiles y sub-perfiles
+          user.value = {
+              ...user.value,
+              ...updatedUser,
+              student_profile: {
+                  ...user.value.student_profile,
+                  ...updatedUser.student_profile
+              },
+              teacher_profile: {
+                  ...user.value.teacher_profile,
+                  ...updatedUser.teacher_profile
+              }
+          }
+      }
 
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      // 🔄 Forzar reactividad
+      user.value = JSON.parse(JSON.stringify(user.value))
 
-      console.log('Perfil Actualizado correctamente', updatedUser)
+      // 🔒 Guardar persistente
+      localStorage.setItem('user', JSON.stringify(user.value))
+      console.log('✅ Perfil actualizado y reactividad forzada:', user.value)
   }
 
   function clearError() {

@@ -87,6 +87,16 @@ const apiService = {
       return response.data
   },
 
+  async changePassword(payload) {
+    const response = await api.post('/auth/change-password', payload)
+    return response.data
+  },
+
+  async actualizarInteresesAlumno(studentId, interesesArray) {
+    const response = await api.put(`/students/${studentId}/interests`, interesesArray)
+      return response.data
+  },
+
   async cargarHistoriasPorAlumno(studentId) {
       const response = await api.get(`/records/student/${studentId}`)
 
