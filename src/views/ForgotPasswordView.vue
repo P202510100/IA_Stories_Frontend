@@ -1,4 +1,3 @@
-<!-- views/ForgotPasswordView.vue - INTEGRADO 100% CON EL BACKEND -->
 <template>
   <div class="forgot-password-container">
     <div class="forgot-password-card">
@@ -8,80 +7,95 @@
       </div>
       
       <!-- Formulario para solicitar recuperación -->
-      <div v-if="!emailEnviado" class="forgot-password-form">
-        <form @submit.prevent="handleForgotPassword">
-          <div class="input-group">
-            <label for="email">📧 Email de tu cuenta</label>
-            <input
-              id="email"
-              v-model="formData.email"
-              type="email"
-              placeholder="tu-email@ejemplo.com"
-              required
-            />
-            <small class="help-text">
-              Ingresa el email que usaste para registrarte
-            </small>
-          </div>
-          
-          <div v-if="error" class="error">
-            {{ error }}
-          </div>
-          
-          <button type="submit" class="btn-enviar" :disabled="loading || !formData.email">
-            <span v-if="loading">⏳ Enviando...</span>
-            <span v-else>📤 Enviar Instrucciones</span>
-          </button>
-        </form>
+      <!-- ======================= -->
+      <!-- PASO 1: INGRESAR CORREO -->
+      <!-- ======================= -->
+      <div v-if="!correoVerificado && !passwordCambiada" class="forgot-password-form">
+        <input
+            v-model="formData.email"
+            type="email"
+            placeholder="📧 tu-email@ejemplo.com"
+            required
+        />
+        <button
+            class="btn btn-primary"
+            :disabled="loading || !formData.email"
+            @click="verificarCorreo"
+        >
+          {{ loading ? '⏳ Verificando...' : 'Continuar' }}
+        </button>
+
+        <p v-if="error" class="error">{{ error }}</p>
 
         <div class="back-to-login">
           <p>¿Recordaste tu contraseña?</p>
-          <router-link to="/login" class="btn-login">
-            🔑 Iniciar Sesión
-          </router-link>
+          <router-link to="/login" class="btn-login">🔑 Iniciar Sesión</router-link>
         </div>
       </div>
 
-      <!-- Confirmación de envío -->
-      <div v-else class="success-message">
-        <div class="success-icon">✅</div>
-        <h2>¡Email enviado!</h2>
-        <p>
-          Hemos enviado las instrucciones para restablecer tu contraseña a:
-        </p>
-        <div class="email-sent">{{ formData.email }}</div>
-        
-        <div class="instructions">
-          <h3>📋 Próximos pasos:</h3>
-          <ol>
-            <li>Revisa tu bandeja de entrada</li>
-            <li>Busca el email de IAStories</li>
-            <li>Haz clic en el enlace de recuperación</li>
-            <li>Crea tu nueva contraseña</li>
-          </ol>
-        </div>
+      <!-- ======================= -->
+      <!-- PASO 2: NUEVA CONTRASEÑA -->
+      <!-- ======================= -->
+      <div v-else-if="correoVerificado && !passwordCambiada" class="reset-section">
+        <h2>🔐 Nueva Contraseña</h2>
 
-        <div class="additional-help">
-          <div class="help-box">
-            <h4>🔍 ¿No encuentras el email?</h4>
-            <ul>
-              <li>Revisa tu carpeta de spam o correo no deseado</li>
-              <li>Verifica que escribiste bien tu email</li>
-              <li>El email puede tardar unos minutos en llegar</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="action-buttons">
-          <button @click="enviarNuevamente" class="btn-reenviar" :disabled="loadingReenvio">
-            <span v-if="loadingReenvio">⏳ Reenviando...</span>
-            <span v-else>🔄 Reenviar Email</span>
+        <div class="password-wrapper">
+          <input
+              v-model="formData.password"
+              :type="mostrarPassword ? 'text' : 'password'"
+              placeholder="Nueva contraseña"
+              required
+              minlength="6"
+          />
+          <button
+              type="button"
+              class="toggle-password"
+              @click="mostrarPassword = !mostrarPassword"
+          >
+            {{ mostrarPassword ? '🙈' : '👁️' }}
           </button>
-          
-          <router-link to="/login" class="btn-login">
-            🔑 Volver al Login
-          </router-link>
         </div>
+
+        <div class="password-wrapper">
+          <input
+              v-model="formData.confirmPassword"
+              :type="mostrarConfirm ? 'text' : 'password'"
+              placeholder="Confirmar contraseña"
+              required
+              minlength="6"
+          />
+          <button
+              type="button"
+              class="toggle-password"
+              @click="mostrarConfirm = !mostrarConfirm"
+          >
+            {{ mostrarConfirm ? '🙈' : '👁️' }}
+          </button>
+        </div>
+
+        <small v-if="formData.confirmPassword" :class="passwordsMatch ? 'text-success' : 'text-danger'">
+          {{ passwordsMatch ? '✅ Coinciden' : '❌ No coinciden' }}
+        </small>
+
+        <button
+            class="btn btn-primary"
+            :disabled="loading || !formularioValido"
+            @click="cambiarPassword"
+        >
+          {{ loading ? '⏳ Cambiando...' : 'Cambiar Contraseña' }}
+        </button>
+
+        <p v-if="error" class="error">{{ error }}</p>
+      </div>
+
+      <!-- ======================= -->
+      <!-- PASO 3: ÉXITO -->
+      <!-- ======================= -->
+      <div v-else class="success-section">
+        <div class="success-icon">✅</div>
+        <h2>¡Contraseña Actualizada!</h2>
+        <p>Tu nueva contraseña ha sido guardada correctamente.</p>
+        <router-link to="/login" class="btn btn-primary">🔑 Ir al Login</router-link>
       </div>
 
     </div>
@@ -89,9 +103,10 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import {ref, onMounted, computed} from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import apiService from '../services/api'
 
 export default {
   name: 'ForgotPasswordView',
@@ -100,109 +115,170 @@ export default {
     const authStore = useAuthStore()
     
     const formData = ref({
-      email: ''
+      email: '',
+      password: '',
+      confirmPassword: ''
     })
-    
+
     const loading = ref(false)
-    const loadingReenvio = ref(false)
-    const error = ref(null)
-    const emailEnviado = ref(false)
+    const correoVerificado = ref(false)
+    const passwordCambiada = ref(false)
+    const error = ref('')
+    const mostrarPassword = ref(false)
+    const mostrarConfirm = ref(false)
 
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-    
-    onMounted(() => {
-      console.log('🔑 Iniciando página de recuperación de contraseña...')
-      
-      // Limpiar errores previos
-      error.value = null
-      
-      // Si ya está autenticado, redirigir
-      if (authStore.isAuthenticated) {
-        console.log('✅ Usuario ya autenticado, redirigiendo...')
-        
-        if (authStore.userType === 'alumno') {
-          router.push('/dashboard-alumno')
-        } else if (authStore.userType === 'docente') {
-          router.push('/dashboard-docente')
-        }
-      }
-    })
+    // Computed
+    const passwordsMatch = computed(() => formData.value.password === formData.value.confirmPassword)
+    const formularioValido = computed(() =>
+        formData.value.password.length >= 6 && passwordsMatch.value
+    )
 
-    // ============================================================================
-    // 🔑 RECUPERACIÓN DE CONTRASEÑA - SOLO BACKEND REAL
-    // ============================================================================
-    
-    const handleForgotPassword = async () => {
-      // Validación básica
-      if (!formData.value.email || !formData.value.email.includes('@')) {
-        error.value = 'Por favor ingresa un email válido'
-        return
-      }
-
-      loading.value = true
-      error.value = null
-
+    // Verificar si el correo existe
+    async function verificarCorreo() {
+      console.log('verificando1')
       try {
-        console.log('🔑 Solicitando recuperación de contraseña...')
-        
-        // Llamada real al backend - SIN FALLBACKS
-        await authStore.forgotPassword(formData.value.email)
-        
-        console.log('✅ Solicitud de recuperación enviada')
-        
-        // Mostrar confirmación
-        emailEnviado.value = true
-        
-      } catch (err) {
-        console.error('❌ Error en recuperación:', err)
-        
-        // Manejar diferentes tipos de error
-        if (err.response?.status === 404) {
-          error.value = 'No encontramos una cuenta con ese email'
-        } else if (err.response?.status === 429) {
-          error.value = 'Has solicitado demasiadas recuperaciones. Intenta más tarde'
-        } else {
-          error.value = err.response?.data?.error || 'Error enviando el email de recuperación'
+        console.log('verificando2')
+        loading.value = true
+        error.value = ''
+        const res = await apiService.verifyEmail({ email: formData.value.email })
+        console.log('verifica: ', res)
+        if (res.exists) {
+          correoVerificado.value = true
         }
+      } catch (err) {
+        error.value = err.response?.data?.detail || '❌ No existe una cuenta con ese correo.'
       } finally {
         loading.value = false
       }
     }
 
-    const enviarNuevamente = async () => {
-      loadingReenvio.value = true
+// Cambiar la contraseña
+    async function cambiarPassword() {
+      if (!formularioValido.value) {
+        error.value = 'Por favor completa correctamente los campos.'
+        return
+      }
 
       try {
-        console.log('🔄 Reenviando email de recuperación...')
-        
-        await authStore.forgotPassword(formData.value.email)
-        
-        console.log('✅ Email reenviado')
-        
+        loading.value = true
+        error.value = ''
+        await apiService.resetPassword({
+          email: formData.value.email,
+          new_password: formData.value.password
+        })
+        passwordCambiada.value = true
       } catch (err) {
-        console.error('❌ Error reenviando email:', err)
-        error.value = 'Error reenviando el email'
+        error.value = err.response?.data?.detail || '❌ Error al cambiar la contraseña.'
       } finally {
-        loadingReenvio.value = false
+        loading.value = false
       }
     }
+
 
     return {
       formData,
       loading,
-      loadingReenvio,
       error,
-      emailEnviado,
-      handleForgotPassword,
-      enviarNuevamente
+      verificarCorreo,
+      cambiarPassword,
+      mostrarPassword,
+      mostrarConfirm,
+      passwordsMatch,
+      formularioValido,
+      correoVerificado,
+      passwordCambiada
     }
   }
 }
 </script>
 
 <style scoped>
+
+.password-wrapper {
+  position: relative;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding: 0.8rem 2.5rem 0.8rem 1rem; /* espacio extra a la derecha para el ícono */
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.password-wrapper input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.toggle-password {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #666;
+  transition: transform 0.2s, color 0.2s;
+}
+
+.toggle-password:hover {
+  color: #333;
+  transform: translateY(-50%) scale(1.1);
+}
+.forgot-password-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f9fafb;
+}
+.forgot-password-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 380px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+input {
+  width: 100%;
+  padding: 0.8rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+.btn {
+  width: 100%;
+  padding: 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+.error {
+  color: #dc3545;
+  margin-top: 0.5rem;
+}
+.text-success {
+  color: #28a745;
+}
+.text-danger {
+  color: #dc3545;
+}
+.success-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
 .forgot-password-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

@@ -13,20 +13,24 @@
           <!-- Selección de tema -->
           <div class="form-group">
             <label for="tema">🎯 Elige tu tema favorito:</label>
-            <div class="temas-grid">
-              <div
-                v-for="tema in temas"
-                :key="tema.id"
-                @click="seleccionarTema(tema.id)"
-                :class="['tema-card', { active: formData.tema === tema.id }]"
-              >
-                <div class="tema-icon">{{ tema.icono }}</div>
-                <h3>{{ tema.nombre }}</h3>
-                <p>{{ tema.descripcion }}</p>
-              </div>
-            </div>
-            <!-- Input SOLO aparece cuando se selecciona la opción "Libre" -->
-            <div v-if="temaSeleccionadoEsLibre" class="tema-libre-input">
+
+            <select
+                id="tema"
+                v-model="formData.tema"
+                class="select-tema"
+                @change="manejarCambioTema"
+            >
+              <option disabled value="">-- Selecciona un tema --</option>
+              <option value="aventura">🌋 Aventura</option>
+              <option value="fantasia">🧙 Fantasía</option>
+              <option value="amistad">🤝 Amistad</option>
+              <option value="misterio">🕵️ Misterio</option>
+              <option value="ciencia">🔬 Ciencia</option>
+              <option value="libre">✏️ Otro (escribe tu propio tema)</option>
+            </select>
+
+            <!-- Campo libre si elige “otro” -->
+            <div v-if="temaLibreActivo" class="tema-libre-input">
               <input
                   type="text"
                   v-model="formData.tema_libre"
@@ -39,10 +43,10 @@
             </div>
 
             <div v-else class="note-small">
-              (Si deseas un tema personalizado selecciona "Libre")
+              (Si deseas un tema personalizado selecciona "Otro")
             </div>
 
-            <div v-if="!temaFinalPresent" class="error-message" v-show="mostrarErrorGenerico">
+            <div v-if="!temaFinalPresente" class="error-message" v-show="mostrarErrorGenerico">
               Por favor selecciona un tema
             </div>
           </div>
@@ -87,22 +91,37 @@
 
           <!-- Botón de crear -->
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" :disabled="!formData.tema">
+            <button type="submit" class="btn btn-primary" :disabled="!formularioCompleto || generando">
               🚀 Crear Mi Historia
             </button>
           </div>
         </form>
       </div>
 
-      <!-- Loading de generación -->
+      <!-- Loading de generación mejorado -->
       <div v-if="generando" class="loading-historia">
         <div class="loading-animation">
           <div class="loading-circle"></div>
           <div class="loading-circle"></div>
           <div class="loading-circle"></div>
         </div>
-        <h3>🤖 La IA está creando tu historia...</h3>
-        <p>Esto puede tomar unos segundos</p>
+
+        <h3>{{ loadingTitulo }}</h3>
+        <p class="tiempo-estimado">{{ loadingSubtitulo }}</p>
+
+        <ul class="loading-steps">
+          <li v-for="(step, index) in loadingSteps" :key="index"
+              :class="{
+          completado: index < loadingPaso,
+          activo: index === loadingPaso,
+          pendiente: index > loadingPaso
+          }">
+            <span class="icono-step">
+              {{ index < loadingPaso ? '✅' : index === loadingPaso ? '⚙️' : '⏳' }}
+            </span>
+            {{ step }}
+          </li>
+        </ul>
       </div>
 
       <!-- Historia generada -->
@@ -311,6 +330,41 @@ export default {
 
     const edadesDisponibles = computed(() => Array.from({ length: 11 }, (_, i) => i + 5))
 
+
+    const formularioCompleto = computed(() => {
+      const tieneTema = temaLibreActivo.value
+          ? formData.value.tema_libre.trim().length > 0
+          : formData.value.tema.trim().length > 0;
+
+      return (
+          tieneTema &&
+          formData.value.nombre_protagonista.trim().length > 0 &&
+          formData.value.edad_protagonista &&
+          formData.value.elementos.trim().length > 0
+      );
+    });
+
+    // Reactive states
+    const temaLibreActivo = ref(false)
+
+    // Detectar cambio en el select
+    function manejarCambioTema(e) {
+      if (formData.value.tema === "libre") {
+        temaLibreActivo.value = true;
+        formData.value.tema_libre = "";
+      } else {
+        temaLibreActivo.value = false;
+      }
+    }
+
+    // Validación del tema final
+    const temaFinalPresente = computed(() => {
+      if (temaLibreActivo.value) {
+        return formData.value.tema_libre && formData.value.tema_libre.trim().length > 0
+      }
+      return formData.value.tema && formData.value.tema.trim().length > 0
+    })
+
     // ===============================
     // Métodos del Formulario
     // ===============================
@@ -369,89 +423,129 @@ export default {
       });
     }
 
+    // 🔧 Estados de loading IA
+    const loadingSteps = [
+      "Analizando perfil del estudiante",
+      "Escribiendo historia educativa",
+      "Generando ilustración con Freepik",
+      "Guardando historia en la base de datos"
+    ];
+    const loadingPaso = ref(0);
+    const loadingTitulo = ref("🤖 Preparando generación...");
+    const loadingSubtitulo = ref("Esto puede tardar entre 20 y 40 segundos");
+
+    const actualizarPaso = (titulo, paso) => {
+      loadingTitulo.value = titulo;
+      loadingPaso.value = paso;
+    };
 
     async function crearHistoria() {
-      mostrarErrorGenerico.value = false
-      mostrarErrorTemaLibre.value = false
-      error.value = null
+      mostrarErrorGenerico.value = false;
+      mostrarErrorTemaLibre.value = false;
+      error.value = null;
 
+      // Validaciones
       if (!formData.value.tema) {
-        mostrarErrorGenerico.value = true
-        error.value = 'Por favor selecciona un tema'
-        return
+        error.value = "Por favor selecciona un tema";
+        mostrarErrorGenerico.value = true;
+        return;
       }
-      if (temaSeleccionadoEsLibre.value && (!formData.value.tema_libre || !formData.value.tema_libre.trim())) {
-        mostrarErrorTemaLibre.value = true
-        error.value = 'Por favor escribe el tema libre'
-        return
+      if (temaSeleccionadoEsLibre.value && !formData.value.tema_libre.trim()) {
+        error.value = "Por favor escribe el tema libre";
+        mostrarErrorTemaLibre.value = true;
+        return;
+      }
+      if (!formData.value.nombre_protagonista.trim()) {
+        error.value = "Por favor ingresa el nombre del protagonista";
+        return;
+      }
+      if (!formData.value.edad_protagonista) {
+        error.value = "Por favor selecciona la edad del protagonista";
+        return;
+      }
+      if (!formData.value.elementos.trim()) {
+        error.value = "Por favor escribe al menos un elemento especial";
+        return;
       }
 
-      // usuario
-      const usuarioActual = authStore.user || authStore.profile
+      const usuarioActual = authStore.user || authStore.profile;
       if (!usuarioActual?.id) {
-        error.value = 'No se pudo identificar al usuario. Inicia sesión.'
-        return
+        error.value = "No se pudo identificar al usuario. Inicia sesión nuevamente.";
+        return;
       }
-      const alumnoId = usuarioActual.alumno_id || usuarioActual.id
 
-      console.log('this is user actul', usuarioActual)
-
-      generando.value = true
-
-      // preparar payload con varios nombres por compatibilidad
-      const temaFinal = temaSeleccionadoEsLibre.value ? formData.value.tema_libre.trim() : formData.value.tema
+      const alumnoId = usuarioActual.alumno_id || usuarioActual.id;
+      const temaFinal = temaSeleccionadoEsLibre.value
+          ? formData.value.tema_libre.trim()
+          : formData.value.tema;
 
       const payload = {
         user_id: alumnoId,
         topic: temaFinal,
         elementos: formData.value.elementos,
         nombre: formData.value.nombre_protagonista,
-        edad: formData.value.edad_protagonista,
-        grado: usuarioActual.student_profile.current_grade
-      }
-      console.log('this is payload: ', payload)
-      try {
-        // Ajusta la ruta según tu apiService; aquí usamos '/stories/generate'
-        const data = await apiService.generarHistoria(payload)
+        edad: formData.value.edad_protagonista
+      };
 
-        console.log("story data: ", data)
-        // Normalizar la respuesta para que el template siga usando "titulo", "contenido", "personajes"
+      generando.value = true;
+      loadingPaso.value = 0;
+      loadingTitulo.value = "🤖 Iniciando generación de historia...";
+      loadingSubtitulo.value = "Esto puede tardar entre 20 y 40 segundos";
+
+      try {
+        // Simulación de fases progresivas
+        actualizarPaso("🧠 Analizando perfil del estudiante...", 0);
+        await new Promise((r) => setTimeout(r, 1500));
+
+        actualizarPaso("✍️ Escribiendo historia educativa...", 1);
+        await new Promise((r) => setTimeout(r, 2500));
+
+        const data = await apiService.generarHistoria(payload);
+        console.log("✅ Historia generada:", data);
+
+        actualizarPaso("🎨 Generando ilustración...", 2);
+        await new Promise((r) => setTimeout(r, 2000));
+
+        // Procesar respuesta IA
         const normalized = {
           titulo: data.title,
           contenido: data.content,
           tema: data.topic,
-          question_answer: data.question_answer,
+          question_answer: data.question_answer || data.questions,
           story_metadata: data.story_metadata,
-          personajes: Array.isArray(data.characters) ? data.characters : tryParseJSON(data.characters),
+          personajes: Array.isArray(data.characters)
+              ? data.characters
+              : tryParseJSON(data.characters),
           record_id: data.record_id,
           created_at: data.created_at,
           image_b64: data.image_b64
-        }
+        };
 
-        // parse preguntas y colocarlas en normalized.questions (array mapeado)
-        let rawQuestions = []
-        try {
-          rawQuestions = typeof normalized.question_answer === 'string' ? tryParseJSON(normalized.question_answer) : normalized.question_answer
-        } catch (e) { rawQuestions = [] }
+        const rawQuestions = Array.isArray(normalized.question_answer)
+            ? normalized.question_answer
+            : tryParseJSON(normalized.question_answer);
 
-        if (!Array.isArray(rawQuestions)) {
-          rawQuestions = []
-        }
-
-        normalized.questions = normalizeQuestions(rawQuestions)
-
-        // guardar en estado
+        normalized.questions = normalizeQuestions(rawQuestions);
         historiaGenerada.value = {
           ...normalized,
-          palabras: normalized.contenido ? normalized.contenido.split(/\s+/).length : 0
-        }
+          palabras: normalized.contenido
+              ? normalized.contenido.split(/\s+/).length
+              : 0
+        };
 
+        actualizarPaso("💾 Guardando historia completada...", 3);
+        await new Promise((r) => setTimeout(r, 800));
       } catch (err) {
-        console.error('Error generando historia:', err)
-        error.value = err.response?.data?.detail || err.response?.data?.message || 'Error al generar la historia'
+        console.error("❌ Error generando historia:", err);
+        error.value =
+            err.response?.data?.detail ||
+            err.response?.data?.message ||
+            "Ocurrió un error al generar la historia.";
       } finally {
-        generando.value = false
-    }}
+        generando.value = false;
+        loadingPaso.value = 0;
+      }
+    }
 
     function tryParseJSON(str) {
       try {
@@ -656,13 +750,138 @@ export default {
       mostrarErrorGenerico,
       temaFinalPresent,
       mostrarErrorTemaLibre,
-      temaSeleccionadoEsLibre
+      temaSeleccionadoEsLibre,
+      temaFinalPresente,
+      manejarCambioTema,
+      temaLibreActivo,
+      formularioCompleto,
+      loadingSteps,
+      actualizarPaso,
+      loadingPaso,
+      loadingSubtitulo,
+      loadingTitulo
+
     }
   }
 }
 </script>
 
 <style scoped>
+
+.loading-historia {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.loading-animation {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.loading-circle {
+  width: 1rem;
+  height: 1rem;
+  margin: 0 0.4rem;
+  border-radius: 50%;
+  background-color: #6b73ff;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.loading-circle:nth-child(2) { animation-delay: 0.2s; }
+.loading-circle:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.loading-steps {
+  list-style: none;
+  padding: 0;
+  margin-top: 1.5rem;
+  text-align: left;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.loading-steps li {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+}
+
+.loading-steps li span.icono-step {
+  margin-right: 0.6rem;
+}
+
+.loading-steps li.activo {
+  font-weight: bold;
+  color: #4f46e5;
+}
+
+.loading-steps li.completado {
+  color: #22c55e;
+}
+
+.loading-steps li.pendiente {
+  color: #999;
+}
+
+
+.error-message {
+  background: #ffe6e6;
+  color: #d9534f;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: 5px;
+  font-size: 0.9rem;
+  border: 1px solid #f5c2c7;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.select-tema {
+  width: 100%;
+  padding: 0.9rem;
+  font-size: 1rem;
+  border-radius: 10px;
+  border: 2px solid #e0e0e0;
+  background-color: white;
+  transition: all 0.3s ease;
+  margin-bottom: 10px;
+}
+
+.select-tema:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+  outline: none;
+}
+
+.tema-libre-input {
+  margin-top: 10px;
+}
+
+.tema-input {
+  width: 100%;
+  padding: 0.8rem;
+  border: 2px solid #ccc;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: 0.3s ease;
+}
+
+.tema-input:focus {
+  border-color: #764ba2;
+  box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.15);
+  outline: none;
+}
 
 .nota-final {
   text-align: center;

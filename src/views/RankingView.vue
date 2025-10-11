@@ -15,24 +15,11 @@
       <div class="filtros-section">
         <div class="filtros-card">
           <div class="filtro-grupo">
-            <label for="periodo-filtro">📅 Período:</label>
-            <select id="periodo-filtro" v-model="periodoSeleccionado" @change="cargarRanking">
-              <option value="semana">Esta semana</option>
-              <option value="mes">Este mes</option>
-              <option value="trimestre">Este trimestre</option>
-              <option value="año">Este año</option>
-              <option value="total">Todo el tiempo</option>
-            </select>
-          </div>
-          
-          <div class="filtro-grupo">
             <label for="criterio-filtro">📊 Criterio:</label>
             <select id="criterio-filtro" v-model="criterioSeleccionado" @change="cargarRanking">
               <option value="puntos">Puntos totales</option>
               <option value="historias">Historias completadas</option>
-              <option value="actividades">Actividades realizadas</option>
               <option value="precision">Precisión promedio</option>
-              <option value="racha">Días de racha</option>
             </select>
           </div>
         </div>
@@ -225,7 +212,11 @@
       <div v-if="error" class="error">
         {{ error }}
       </div>
-      
+      <!-- Overlay de carga -->
+      <div v-if="cargando" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Cargando ranking de estudiantes...</p>
+      </div>
     </div>
   </div>
 </template>
@@ -234,6 +225,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import apiService from "../services/api.js";
 
 export default {
   name: 'RankingView',
@@ -243,7 +235,6 @@ export default {
     
     const cargando = ref(true)
     const error = ref('')
-    const periodoSeleccionado = ref('mes')
     const criterioSeleccionado = ref('puntos')
     const rankingCompleto = ref([])
     const estadisticas = ref({})
@@ -279,9 +270,9 @@ export default {
         await new Promise(resolve => setTimeout(resolve, 1500))
         
         // Datos de ejemplo
-        const datosEjemplo = generarDatosRanking()
-        rankingCompleto.value = datosEjemplo.ranking
-        estadisticas.value = datosEjemplo.estadisticas
+        const datos = generarDatosRanking()
+        rankingCompleto.value = datos.ranking
+        estadisticas.value = datos.estadisticas
         
       } catch (err) {
         console.error('Error cargando ranking:', err)
@@ -293,80 +284,29 @@ export default {
     
 const generarDatosRanking = async () => {
   try {
-    console.log('🏆 Cargando ranking real de estudiantes...')
-    
-    if (!authStore.user?.id || !authStore.profile?.id) {
-      throw new Error('No se encontró el perfil del usuario')
-    }
-    
-    // ✅ USAR API para obtener ranking
-    const docenteId = authStore.profile.id
-    const response = await apiService.obtenerRankingEstudiantes(docenteId)
-    
-    // Procesar estudiantes reales
-    const estudiantesReales = (response.ranking || response.estudiantes || []).map((estudiante, index) => ({
-      id: estudiante.id || estudiante.user_id || estudiante.alumno_id,
+    const response = await apiService.obtenerRanking();
+    console.log('response from ranking', response)
+    const estudiantesReales = (response.ranking || []).map((estudiante, index) => ({
+      id: estudiante.id,
       nombre: estudiante.nombre,
-      puntos: estudiante.puntos_totales || 0,
-      historias: estudiante.total_historias || 0,
-      actividades: estudiante.total_actividades || 0,
-      precision: estudiante.precision || calcularPrecisionRanking(estudiante),
-      racha: estudiante.racha || Math.floor(Math.random() * 10) + 1, // Temporal hasta tener dato real
+      puntos: estudiante.puntos || 0,
+      historias: estudiante.historias || 0,
+      precision: estudiante.precision || 0,
+      respuestas_correctas: estudiante.respuestas_correctas || 0,
+      total_respuestas: estudiante.total_respuestas || 0,
       tendencia: determinarTendencia(index),
-      cambio: Math.floor(Math.random() * 5) - 2 // Temporal hasta tener dato real
-    }))
-    
-    // Ordenar según criterio seleccionado
-    const criterio = criterioSeleccionado.value
-    estudiantesReales.sort((a, b) => {
-      switch (criterio) {
-        case 'puntos':
-          return b.puntos - a.puntos
-        case 'historias':
-          return b.historias - a.historias
-        case 'actividades':
-          return b.actividades - a.actividades
-        case 'precision':
-          return b.precision - a.precision
-        default:
-          return b.puntos - a.puntos
-      }
-    })
-    
-    // Calcular estadísticas reales
-    const estadisticasReales = {
-      total_participantes: estudiantesReales.length,
-      promedio_puntos: estudiantesReales.length > 0 
-        ? Math.round(estudiantesReales.reduce((sum, est) => sum + est.puntos, 0) / estudiantesReales.length)
-        : 0,
-      mejor_estudiante: estudiantesReales.length > 0 ? estudiantesReales[0] : null,
-      total_historias: estudiantesReales.reduce((sum, est) => sum + est.historias, 0),
-      promedio_precision: estudiantesReales.length > 0
-        ? Math.round(estudiantesReales.reduce((sum, est) => sum + est.precision, 0) / estudiantesReales.length)
-        : 0
-    }
-    
-    console.log(`✅ Ranking real cargado: ${estudiantesReales.length} estudiantes`)
-    
-    return {
-      ranking: estudiantesReales,
-      estadisticas: estadisticasReales
-    }
-    
+      cambio: Math.floor(Math.random() * 5) - 2
+    }));
+
+    rankingCompleto.value = estudiantesReales;
+    estadisticas.value = response.estadisticas;
+
+    console.log("✅ Ranking cargado:", estudiantesReales);
   } catch (err) {
-    console.error('❌ Error cargando ranking real:', err)
-    
-    //  NO retornar datos demo, retornar estructura vacía
-    return {
-      ranking: [],
-      estadisticas: {
-        total_participantes: 0,
-        promedio_puntos: 0,
-        mejor_estudiante: null,
-        total_historias: 0,
-        promedio_precision: 0
-      }
-    }
+    console.error("❌ Error cargando ranking:", err);
+    error.value = "Error al cargar el ranking";
+  } finally {
+    cargando.value = false;
   }
 }
 
@@ -410,12 +350,8 @@ const determinarTendencia = (index) => {
           return `${estudiante.puntos} puntos`
         case 'historias':
           return `${estudiante.historias} historias`
-        case 'actividades':
-          return `${estudiante.actividades} actividades`
         case 'precision':
           return `${estudiante.precision}% precisión`
-        case 'racha':
-          return `${estudiante.racha} días`
         default:
           return `${estudiante.puntos} puntos`
       }
@@ -475,7 +411,6 @@ const determinarTendencia = (index) => {
     return {
       cargando,
       error,
-      periodoSeleccionado,
       criterioSeleccionado,
       rankingCompleto,
       estadisticas,
@@ -498,6 +433,54 @@ const determinarTendencia = (index) => {
 </script>
 
 <style scoped>
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(3px);
+}
+
+.loading-spinner {
+  width: 70px;
+  height: 70px;
+  border: 6px solid #d3d3d3;
+  border-top: 6px solid #4c6ef5;
+  border-radius: 50%;
+  animation: spin 1.2s linear infinite;
+}
+
+.loading-text {
+  margin-top: 20px;
+  font-size: 1.2rem;
+  color: #4c6ef5;
+  font-weight: 600;
+  text-align: center;
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .ranking-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

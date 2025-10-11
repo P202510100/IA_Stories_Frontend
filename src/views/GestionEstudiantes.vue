@@ -106,7 +106,7 @@
             <div class="col-estudiante">Estudiante</div>
             <div class="col-estado">Estado</div>
             <div class="col-puntos">Puntos</div>
-            <div class="col-historias">Historias</div>
+            <div class="col-historias">Level</div>
             <div class="col-actividad">Última Actividad</div>
             <div class="col-acciones">Acciones</div>
           </div>
@@ -136,6 +136,17 @@
                 </span>
               </div>
 
+              <div class="col-puntos">
+                ⭐ {{ estudiante.puntos_totales || 0 }}
+              </div>
+
+              <div class="col-historias">
+                📚 {{ estudiante.current_level || 0 }}
+              </div>
+
+              <div class="col-actividad">
+                🕒 {{ formatActividad(estudiante.last_updated_date) }}
+              </div>
 
               <div class="col-acciones" @click.stop>
                 <div class="acciones-dropdown">
@@ -151,18 +162,13 @@
                     <button @click="verDetalleEstudiante(estudiante.id)" class="dropdown-item">
                       👁️ Ver Detalle
                     </button>
+                    <!-- Matricular / Desmatricular -->
                     <button
-                        @click="abrirPopupMatricula(estudiante)"
+                        @click="toggleMatricula(estudiante)"
                         class="dropdown-item"
-                        :disabled="estudiante.matriculado"
                     >
-                      ✅ {{ estudiante.matriculado ? 'Ya Matriculado' : 'Matricular' }}
-                    </button>
-                    <button @click="resetearProgreso(estudiante)" class="dropdown-item">
-                      🔄 Resetear Progreso
-                    </button>
-                    <button @click="confirmarDesvinculacion(estudiante)" class="dropdown-item danger">
-                      🚫 Desvincular
+                      <span v-if="estudiante.cargandoMatricula">⏳ Procesando...</span>
+                      {{ estudiante.matriculado ? '🚫 Desmatricular' : '✅ Matricular' }}
                     </button>
                   </div>
                 </div>
@@ -203,11 +209,11 @@
                 👁️ Ver Detalle
               </button>
               <button
-                  @click="abrirPopupMatricula(estudiante)"
+                  @click="toggleMatricula(estudiante)"
                   class="btn-tarjeta matricular"
-                  :disabled="estudiante.matriculado"
               >
-                ✅ {{ estudiante.matriculado ? 'Matriculado' : 'Matricular' }}
+                <span v-if="estudiante.cargandoMatricula">⏳ Procesando...</span>
+                {{ estudiante.matriculado ? '🚫 Desmatricular' : '✅ Matricular' }}
               </button>
             </div>
           </div>
@@ -432,6 +438,37 @@ export default {
       return resultado
     })
 
+    const toggleMatricula = async (estudiante) => {
+      try {
+        // Indicador visual temporal
+        estudiante.cargandoMatricula = true
+
+        if (estudiante.matriculado) {
+          // 🔻 DESMATRICULAR
+          await apiService.unenrollStudent(
+              user.value.teacher_profile.id,
+              estudiante.id
+          )
+          estudiante.matriculado = false
+          toastStore.info(`${estudiante.nombre} fue desmatriculado ❌`)
+        } else {
+          // ✅ MATRICULAR
+          await apiService.enrollStudentWithTeacher(
+              user.value.teacher_profile.id,
+              estudiante.id
+          )
+          estudiante.matriculado = true
+          toastStore.success(`${estudiante.nombre} fue matriculado 🎉`)
+        }
+      } catch (err) {
+        console.error('❌ Error en matriculación:', err)
+        toastStore.error('Error al actualizar la matrícula del estudiante')
+      } finally {
+        estudiante.cargandoMatricula = false
+      }
+    }
+
+
     const abrirPopupMatricula = (estudiante) => {
       if (estudiante.matriculado) return
       estudianteSeleccionado.value = estudiante
@@ -479,7 +516,8 @@ export default {
           email: e.email || 'Sin email',
           estado: e.activo,
           puntos_totales: e.total_points,
-          fecha_registro: e.last_updated_date,
+          current_level: e.current_level,
+          last_updated_date: e.last_updated_date,
           matriculado: e.matriculado || false
         }))
       } catch (err) {
@@ -556,20 +594,7 @@ export default {
       toastStore.info(`Enviando mensaje a ${estudiante.nombre}`)
     }
 
-    const resetearProgreso = async (estudiante) => {
-      dropdownActivo.value = null
 
-      const confirmacion = confirm(`¿Estás seguro de que quieres resetear el progreso de ${estudiante.nombre}?`)
-      if (!confirmacion) return
-
-      try {
-        // TODO: Llamar API real
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        toastStore.success(`Progreso de ${estudiante.nombre} reseteado correctamente`)
-      } catch (err) {
-        toastStore.error('Error al resetear el progreso')
-      }
-    }
     
     const confirmarDesvinculacion = (estudiante) => {
       dropdownActivo.value = null
@@ -762,7 +787,6 @@ const refrescarEstudiantes = () => {
       toggleDropdown,
       verDetalleEstudiante,
       enviarMensaje,
-      resetearProgreso,
       confirmarDesvinculacion,
       desvincularEstudiante,
       enviarInvitacion,
@@ -770,7 +794,8 @@ const refrescarEstudiantes = () => {
       cargarTodosLosEstudiantes,
       asignarEstudiante,
       desasignarEstudiante,
-      refrescarEstudiantes
+      refrescarEstudiantes,
+      toggleMatricula
     }
   }
 }

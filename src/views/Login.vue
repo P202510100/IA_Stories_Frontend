@@ -59,19 +59,6 @@
           <router-link to="/register">📝 Regístrate aquí</router-link>
         </div>
       </div>
-
-      <!-- Estado de conexión del backend -->
-      <div class="connection-status">
-        <div v-if="backendStatus === 'connected'" class="status-ok">
-          ✅ Conectado al servidor
-        </div>
-        <div v-else-if="backendStatus === 'checking'" class="status-checking">
-          🔄 Verificando conexión...
-        </div>
-        <div v-else class="status-error">
-          ❌ Sin conexión al servidor
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -145,28 +132,6 @@ export default {
       }
     }
 
-   
-    const checkBackendConnection = async () => {
-      try {
-        backendStatus.value = 'checking'
-        
-      
-        const isConnected = await authStore.checkConnection()
-        
-        if (isConnected) {
-          backendStatus.value = 'connected'
-          console.log('✅ Backend conectado y funcional')
-        } else {
-          backendStatus.value = 'error'
-          console.warn('⚠️ Backend no responde')
-        }
-        
-      } catch (error) {
-        backendStatus.value = 'error'
-        console.error('❌ Error verificando backend:', error)
-      }
-    }
-
     
     const checkExistingSession = () => {
       if (authStore.restoreSession()) {
@@ -178,7 +143,6 @@ export default {
     // Lifecycle hooks
     onMounted(() => {
        console.log('🔄 Componente Login montado')
-  checkBackendConnection()
 
   //  VERIFICAR PARÁMETROS DE URL ANTES DE VERIFICAR SESIÓN
   const urlParams = new URLSearchParams(window.location.search)

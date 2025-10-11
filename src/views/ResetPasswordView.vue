@@ -1,4 +1,3 @@
-<!-- src/views/ResetPasswordView.vue -->
 <template>
   <div class="reset-password-container">
     <div class="reset-password-card">
@@ -14,126 +13,74 @@
       <!-- ============================================ -->
       <!-- VALIDANDO TOKEN -->
       <!-- ============================================ -->
-      <div v-if="validatingToken" class="validating">
-        <div class="spinner"></div>
-        <p>⏳ Verificando tu enlace...</p>
-      </div>
+      <div v-if="!correoVerificado" class="correo-section">
+        <input
+            v-model="formData.email"
+            type="email"
+            placeholder="📧 Tu correo electrónico"
+            required
+        />
+        <button @click="verificarCorreo" :disabled="loading" class="btn btn-primary">
+          {{ loading ? '⏳ Verificando...' : 'Continuar' }}
+        </button>
 
-      <!-- ============================================ -->
-      <!-- TOKEN INVÁLIDO -->
-      <!-- ============================================ -->
-      <div v-else-if="tokenInvalido" class="error-section">
-        <div class="error-icon">❌</div>
-        <h2>Enlace no válido</h2>
-        <p>Este enlace de recuperación ha expirado o no es válido.</p>
-        
-        <div class="error-actions">
-          <router-link to="/forgot-password" class="btn btn-primary">
-            🔄 Solicitar nuevo enlace
-          </router-link>
-          <router-link to="/login" class="btn btn-secondary">
-            🔑 Ir al login
-          </router-link>
-        </div>
+        <p v-if="error" class="error">{{ error }}</p>
       </div>
 
       <!-- ============================================ -->
       <!-- FORMULARIO PARA NUEVA CONTRASEÑA -->
       <!-- ============================================ -->
+      <!-- FORMULARIO NUEVA CONTRASEÑA -->
       <div v-else-if="!passwordCambiada" class="reset-form">
         <form @submit.prevent="handleResetPassword">
-          <!-- Nueva contraseña -->
           <div class="input-group">
-            <label for="password">🔐 Nueva Contraseña</label>
-            <div class="password-input-wrapper">
-              <input
-                id="password"
+            <label>Nueva Contraseña</label>
+            <input
                 v-model="formData.password"
                 :type="mostrarPassword ? 'text' : 'password'"
                 placeholder="Mínimo 6 caracteres"
                 required
                 minlength="6"
-                @input="validarPassword"
-              />
-              <button 
-                type="button" 
+            />
+            <button
+                type="button"
                 class="toggle-password"
                 @click="mostrarPassword = !mostrarPassword"
-              >
-                {{ mostrarPassword ? '🙈' : '👁️' }}
-              </button>
-            </div>
-            
-            <!-- Indicador de fortaleza -->
-            <div class="password-strength">
-              <div class="strength-bar" :class="passwordStrength.class">
-                <div class="strength-fill" :style="{ width: passwordStrength.width }"></div>
-              </div>
-              <small :class="passwordStrength.class">
-                {{ passwordStrength.text }}
-              </small>
-            </div>
+            >
+              {{ mostrarPassword ? '🙈' : '👁️' }}
+            </button>
           </div>
 
-          <!-- Confirmar contraseña -->
           <div class="input-group">
-            <label for="confirmPassword">🔐 Confirma tu Contraseña</label>
-            <div class="password-input-wrapper">
-              <input
-                id="confirmPassword"
+            <label>Confirmar Contraseña</label>
+            <input
                 v-model="formData.confirmPassword"
                 :type="mostrarConfirm ? 'text' : 'password'"
-                placeholder="Escribe la contraseña de nuevo"
+                placeholder="Repite la contraseña"
                 required
                 minlength="6"
-              />
-              <button 
-                type="button" 
+            />
+            <button
+                type="button"
                 class="toggle-password"
                 @click="mostrarConfirm = !mostrarConfirm"
-              >
-                {{ mostrarConfirm ? '🙈' : '👁️' }}
-              </button>
-            </div>
-            
-            <!-- Validación de coincidencia -->
-            <small 
-              v-if="formData.confirmPassword" 
-              :class="passwordsMatch ? 'text-success' : 'text-danger'"
             >
-              {{ passwordsMatch ? '✅ Las contraseñas coinciden' : '❌ Las contraseñas no coinciden' }}
-            </small>
+              {{ mostrarConfirm ? '🙈' : '👁️' }}
+            </button>
           </div>
 
-          <!-- Requisitos de contraseña -->
-          <div class="password-requirements">
-            <h4>📋 Tu contraseña debe tener:</h4>
-            <ul>
-              <li :class="{ valid: formData.password.length >= 6 }">
-                {{ formData.password.length >= 6 ? '✅' : '⚪' }} Al menos 6 caracteres
-              </li>
-              <li :class="{ valid: tieneNumero }">
-                {{ tieneNumero ? '✅' : '⚪' }} Al menos un número
-              </li>
-              <li :class="{ valid: tieneMayuscula }">
-                {{ tieneMayuscula ? '✅' : '⚪' }} Al menos una mayúscula
-              </li>
-            </ul>
-          </div>
+          <small v-if="formData.confirmPassword" :class="passwordsMatch ? 'text-success' : 'text-danger'">
+            {{ passwordsMatch ? '✅ Las contraseñas coinciden' : '❌ No coinciden' }}
+          </small>
 
-          <!-- Error -->
-          <div v-if="error" class="error-message">
-            ❌ {{ error }}
-          </div>
+          <div v-if="error" class="error-message">❌ {{ error }}</div>
 
-          <!-- Botón submit -->
-          <button 
-            type="submit" 
-            class="btn-reset"
-            :disabled="loading || !formularioValido"
+          <button
+              type="submit"
+              class="btn btn-primary"
+              :disabled="loading || !formularioValido"
           >
-            <span v-if="loading">⏳ Cambiando contraseña...</span>
-            <span v-else>🔓 Cambiar Contraseña</span>
+            {{ loading ? '⏳ Cambiando...' : 'Cambiar Contraseña' }}
           </button>
         </form>
       </div>
@@ -142,22 +89,11 @@
       <!-- ÉXITO -->
       <!-- ============================================ -->
       <div v-else class="success-section">
-        <div class="success-animation">
-          <div class="checkmark">✓</div>
-        </div>
-        <h2>¡Contraseña Cambiada!</h2>
-        <p>Tu contraseña ha sido actualizada exitosamente.</p>
-        
-        <div class="success-actions">
-          <router-link to="/login" class="btn btn-primary">
-            🚀 Ir al Login
-          </router-link>
-        </div>
-
-        <!-- Contador de redirección -->
-        <p class="redirect-text">
-          Serás redirigido en {{ countdown }} segundos...
-        </p>
+        <h2>✅ ¡Contraseña cambiada!</h2>
+        <p>Tu contraseña fue actualizada correctamente.</p>
+        <button class="btn btn-primary" @click="router.push('/login')">
+          🔑 Ir al Login
+        </button>
       </div>
     </div>
   </div>
@@ -168,6 +104,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import apiService from '../services/api'
 
 export default {
   name: 'ResetPasswordView',
@@ -180,18 +117,15 @@ export default {
     // ============================================
     // ESTADOS
     // ============================================
-    const token = ref('')
-    const validatingToken = ref(true)
-    const tokenInvalido = ref(false)
     const loading = ref(false)
-    const error = ref('')
+    const correoVerificado = ref(false)
     const passwordCambiada = ref(false)
-    const countdown = ref(5)
-    
+    const error = ref('')
     const mostrarPassword = ref(false)
     const mostrarConfirm = ref(false)
 
     const formData = ref({
+      email: '',
       password: '',
       confirmPassword: ''
     })
@@ -199,171 +133,119 @@ export default {
     // ============================================
     // COMPUTED - VALIDACIONES
     // ============================================
-    const tieneNumero = computed(() => /\d/.test(formData.value.password))
-    const tieneMayuscula = computed(() => /[A-Z]/.test(formData.value.password))
-    const passwordsMatch = computed(() => 
-      formData.value.password === formData.value.confirmPassword && 
-      formData.value.confirmPassword !== ''
+    const passwordsMatch = computed(() => formData.value.password === formData.value.confirmPassword)
+    const formularioValido = computed(() =>
+        formData.value.password.length >= 6 && passwordsMatch.value
     )
 
-    const formularioValido = computed(() => 
-      formData.value.password.length >= 6 &&
-      passwordsMatch.value &&
-      tieneNumero.value &&
-      tieneMayuscula.value
-    )
-
-    const passwordStrength = computed(() => {
-      const pwd = formData.value.password
-      if (!pwd) return { class: '', width: '0%', text: '' }
-
-      let strength = 0
-      if (pwd.length >= 6) strength++
-      if (pwd.length >= 8) strength++
-      if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength++
-      if (/\d/.test(pwd)) strength++
-      if (/[^a-zA-Z0-9]/.test(pwd)) strength++
-
-      if (strength <= 2) {
-        return { 
-          class: 'weak', 
-          width: '33%', 
-          text: '🔴 Débil' 
-        }
-      } else if (strength <= 3) {
-        return { 
-          class: 'medium', 
-          width: '66%', 
-          text: '🟡 Media' 
-        }
-      } else {
-        return { 
-          class: 'strong', 
-          width: '100%', 
-          text: '🟢 Fuerte' 
-        }
-      }
-    })
-
-    // ============================================
-    // MÉTODOS
-    // ============================================
-    const validarPassword = () => {
-      if (formData.value.password.length < 6) {
-        error.value = 'La contraseña debe tener al menos 6 caracteres'
-      } else if (!tieneNumero.value) {
-        error.value = 'Debe incluir al menos un número'
-      } else if (!tieneMayuscula.value) {
-        error.value = 'Debe incluir al menos una mayúscula'
-      } else {
+    // Verificar correo
+    async function verificarCorreo() {
+      try {
+        loading.value = true
         error.value = ''
-      }
-    }
-
-    const validarToken = async () => {
-      try {
-        validatingToken.value = true
-        
-        // Obtener token de la URL
-        token.value = route.query.token
-        
-        if (!token.value) {
-          console.error('❌ No se encontró token en la URL')
-          tokenInvalido.value = true
-          toastStore.error('No se encontró el token de recuperación en la URL')
-          return
+        const res = await apiService.verifyEmail({ email: formData.value.email })
+        if (res.exists) {
+          correoVerificado.value = true
         }
-
-        console.log('🔍 Validando token con el backend:', token.value)
-
-        await authStore.validateResetToken(token.value)
-        
-        console.log('✅ Token válido')
-        tokenInvalido.value = false
-        
       } catch (err) {
-        console.error('❌ Token inválido:', err)
-        tokenInvalido.value = true
-        toastStore.error('El enlace de recuperación no es válido o ha expirado')
-      } finally {
-        validatingToken.value = false
-      }
-    }
-
-    const handleResetPassword = async () => {
-      // Validaciones finales
-      if (!formularioValido.value) {
-        error.value = 'Por favor completa todos los requisitos'
-        return
-      }
-
-      loading.value = true
-      error.value = ''
-
-      try {
-        console.log('🔐 Cambiando contraseña con token:', token.value)
-        
-        await authStore.resetPassword(token.value, formData.value.password)
-        
-        console.log('✅ Contraseña cambiada exitosamente')
-        
-        passwordCambiada.value = true
-        toastStore.success('¡Tu contraseña ha sido cambiada exitosamente!')
-        
-        // Iniciar countdown para redirección
-        startCountdown()
-        
-      } catch (err) {
-        console.error('❌ Error cambiando contraseña:', err)
-        error.value = err.response?.data?.error || 'Error al cambiar la contraseña'
-        toastStore.error(error.value)
+        error.value = err.response?.data?.detail || '❌ No existe una cuenta con ese correo.'
       } finally {
         loading.value = false
       }
     }
 
-    const startCountdown = () => {
-      const interval = setInterval(() => {
-        countdown.value--
-        
-        if (countdown.value <= 0) {
-          clearInterval(interval)
-          router.push('/login')
-        }
-      }, 1000)
+    // Cambiar contraseña
+    async function handleResetPassword() {
+      if (!formularioValido.value) {
+        error.value = 'Por favor completa correctamente el formulario.'
+        return
+      }
+
+      try {
+        loading.value = true
+        error.value = ''
+        await apiService.resetPassword({
+          email: formData.value.email,
+          new_password: formData.value.password
+        })
+        passwordCambiada.value = true
+      } catch (err) {
+        error.value = err.response?.data?.detail || '❌ Error al cambiar la contraseña.'
+      } finally {
+        loading.value = false
+      }
     }
+
 
     // ============================================
     // LIFECYCLE
     // ============================================
     onMounted(() => {
       console.log('🔓 Iniciando vista de reset password')
-      validarToken()
     })
 
     return {
       formData,
       loading,
       error,
-      validatingToken,
-      tokenInvalido,
       passwordCambiada,
-      countdown,
       mostrarPassword,
       mostrarConfirm,
-      tieneNumero,
-      tieneMayuscula,
       passwordsMatch,
       formularioValido,
-      passwordStrength,
-      validarPassword,
-      handleResetPassword
+      handleResetPassword,
+      verificarCorreo,
+      correoVerificado
     }
   }
 }
 </script>
 
 <style scoped>
+
+.reset-password-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f9f9f9;
+}
+.reset-password-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  width: 380px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+input {
+  width: 100%;
+  padding: 0.8rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-bottom: 1rem;
+}
+.btn {
+  width: 100%;
+  padding: 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+.error-message, .error {
+  color: #d93025;
+  margin-top: 0.5rem;
+}
+.text-success {
+  color: #28a745;
+}
+.text-danger {
+  color: #dc3545;
+}
 .reset-password-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
