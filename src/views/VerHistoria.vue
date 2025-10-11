@@ -449,7 +449,8 @@ export default {
           tema: response.story?.topic || '',
           personajes: response.story?.characters || [],
           created_at: response.story.created_at,
-          imagen: response.story?.image_b64 || null
+          imagen: response.story?.image_b64 || null,
+          palabras: response.story?.content ? response.story?.content.split(/\s+/).length : 0 ,
         }
 
         // 🔥 Mapear preguntas a la estructura que usa el frontend

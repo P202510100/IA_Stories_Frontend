@@ -512,9 +512,9 @@ export default {
         const doc = new jsPDF()
 
         // Logo (ejemplo: un PNG en /assets/logo.png)
-        const logo = new Image()
-        logo.src = "/src/assets/iastories.png" // asegúrate que esté en tu carpeta public/assets
-        doc.addImage(logo, "PNG", 10, 10, 30, 30)
+        //const logo = new Image()
+        //logo.src = "/src/assets/iastories.png" // asegúrate que esté en tu carpeta public/assets
+        //doc.addImage(logo, "PNG", 10, 10, 30, 30)
 
         // Título
         doc.setFontSize(18)

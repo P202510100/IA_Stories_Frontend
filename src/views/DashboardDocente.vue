@@ -248,14 +248,23 @@ export default {
           throw new Error('No se encontró el perfil del docente')
         }
 
-        // 1) Traer estudiantes del docente
         const docenteId = profile.value.id
         const resp = await apiService.obtenerEstudiantesDocente(docenteId)
-        console.log("repsonse: ", resp)
-        const raw = resp?.estudiantes ?? resp ?? []
+        console.log("📚 Respuesta del endpoint:", resp)
+
+        // Puede venir como array plano o como {estudiantes: [...]}
+        let raw = Array.isArray(resp) ? resp : (resp?.estudiantes ?? [])
+
+        // Quedarnos SOLO con matriculados (robusto si viene boolean, número o string)
+        const esMatriculado = (v) =>
+            v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true')
+
+        raw = raw.filter(e => esMatriculado(e.matriculado))
 
         // 2) Normalizar estudiantes
         estudiantes.value = raw.map(normalizarEstudiante)
+
+        console.log('✅ Estudiantes matriculados:', estudiantes.value.length)
         console.log('this is stunde.value: ',estudiantes.value)
         // 3) Estadísticas generales
         estadisticas.value = calcularEstadisticas(estudiantes.value)
@@ -293,13 +302,17 @@ export default {
         email: s.email || '-',
         current_level: s.current_level || s.nivel || 'Principiante',
 
-        // Métricas normalizadas:
+        // Métricas:
         total_points: s.total_points ?? s.puntos_totales ?? 0,
         total_historias: s.total_historias ?? s.story_count ?? historiasNorm.length,
         total_actividades: s.total_actividades ?? s.actividades_completadas ?? s.activities_count ?? 0,
 
-        // Historias normalizadas:
-        historias: historiasNorm
+        // Historias:
+        historias: historiasNorm,
+
+        // 🔖 Flag que viene del backend:
+        matriculado: s.matriculado === true || s.matriculado === 1 || s.matriculado === '1' ||
+            (typeof s.matriculado === 'string' && s.matriculado.toLowerCase() === 'true')
       }
     }
 
