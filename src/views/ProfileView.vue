@@ -912,7 +912,7 @@ export default {
         
         console.log('🗑️ Eliminando cuenta...')
         
-        await apiService.deleteUser(user.value.id)
+        await apiService.deleteUser()
         
         // Cerrar sesión y limpiar datos
         authStore.logout()

@@ -52,46 +52,6 @@ const apiService = {
     return response.data
   },
 
-  async forgotPassword(email) {
-    const response = await api.post('/auth/forgot-password', { email })
-    return response.data
-  },
-
- async resetPassword(token, newPassword) {
-    try {
-      console.log('📡 API: Restableciendo contraseña...')
-      
-      const response = await api.post('/auth/reset-password', {
-        token: token,
-        new_password: newPassword
-      })
-      
-      console.log('✅ API: Contraseña restablecida')
-      return response.data
-      
-    } catch (error) {
-      console.error('❌ API: Error restableciendo contraseña:', error.response?.data || error.message)
-      throw error
-    }
-  },
-
-  async validateResetToken(token) {
-    try {
-      console.log('📡 API: Validando token de reset...')
-      
-      const response = await api.post('/auth/validate-reset-token', {
-        token: token
-      })
-      
-      console.log('✅ API: Token válido')
-      return response.data
-      
-    } catch (error) {
-      console.error('❌ API: Token inválido:', error.response?.data || error.message)
-      throw error
-    }
-  },
-
   async updateUser(userId, userData) {
       console.log(userId, userData)
     const response = await api.put(`/users/${userId}`, {
@@ -101,19 +61,30 @@ const apiService = {
   },
 
   async deleteUser(userId) {
-    const response = await api.delete('/auth/delete-account', {
-      data: { user_id: userId }
-    })
-    return response.data
+      const token = localStorage.getItem('token') || localStorage.getItem('access_token')
+      if (!token) throw new Error('No se encontró token de autenticación')
+
+      const response = await api.delete('/auth/delete-account', {
+          headers: {
+              Authorization: `Bearer ${token}`
+          }
+      })
+      return response.data
   },
 
   // ============================================================================
   //  HISTORIAS - ENDPOINTS 
   // ============================================================================
-  
-  async obtenerTemas() {
-    const response = await api.get('/historias/temas')
-    return response.data
+
+  async verifyEmail(payload) {
+      console.log(payload)
+      const response = await api.post('/auth/verify-email', payload)
+      return response.data
+  },
+
+  async resetPassword(payload) {
+    const response = await api.post('/auth/reset-password', payload)
+      return response.data
   },
 
   async cargarHistoriasPorAlumno(studentId) {
@@ -166,83 +137,11 @@ const apiService = {
       return response.data
   },
 
-  async obtenerRankingEstudiantes(docenteId) {
-    return this.obtenerRankingClase(docenteId)
-  },
-
-  async obtenerTodosLosEstudiantes() {
-  try {
-    const response = await api.get('/api/alumnos/todos')
-    return response.data
-  } catch (error) {
-    try {
-      const response = await api.get('/api/alumnos')
-      return response.data
-    } catch (error2) {
-      console.error('❌ No se pudo obtener estudiantes:', error2)
-      throw new Error('No se pudo cargar la lista de estudiantes')
-    }
-  }
-},
-  
-  async asociarEstudiante(docenteId, alumnoId) {
-    const response = await api.post(`/api/docentes/${docenteId}/associate`, {
-      alumno_id: alumnoId
-    })
+  async obtenerRanking() {
+    const response = await api.get(`/records/ranking/class`);
     return response.data
   },
 
-  async desvincularEstudiante(docenteId, alumnoId) {
-    const response = await api.delete(`/api/docentes/${docenteId}/students/${alumnoId}`)
-    return response.data
-  },
-
-  async descargarReporteDocente(docenteId) {
-    try {
-      const response = await api.get(`/api/docentes/${docenteId}/report`, {
-        responseType: 'blob'
-      })
-      return response
-    } catch (error) {
-      console.warn('⚠️ Endpoint report no disponible, generando PDF demo')
-      // Crear un PDF básico demo si el endpoint no existe
-      const pdfContent = `IAStories - Reporte Demo\nDocente ID: ${docenteId}\nFecha: ${new Date().toLocaleDateString()}\n\nEste es un reporte de prueba.`
-      const blob = new Blob([pdfContent], { type: 'application/pdf' })
-      return { data: blob }
-    }
-  },
-    async obtenerProgreso(alumnoId) {
-        const response = await api.get(`api/progress/${alumnoId}`);
-        return response.data;
-    },
-
-  async obtenerDetalleEstudiante(docenteId, alumnoId) {
-    const response = await api.get(`/api/docentes/${docenteId}/students/${alumnoId}/detail`)
-    return response.data
-  },
-
-  // ============================================================================
-  //  RANKING - 
-  // ============================================================================
-  
-  async obtenerRankingClase(docenteId) {
-    const response = await api.get(`/api/docentes/${docenteId}/ranking`)
-    return response.data
-  },
-
-  // ============================================================================
-  //  HEALTH CHECK - 
-  // ============================================================================
-  
-  async healthCheck() {
-      return await axios.get({
-        baseURL: 'http://localhost:8000/',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        timeout: 100000, // Aumentado para generación IA
-    })
-  },
   async guardarProgreso(recordId, respuestas) {
      return api.post(`/records/${recordId}/save-progress`, respuestas)
   },

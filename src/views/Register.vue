@@ -7,149 +7,188 @@
       </div>
 
       <form @submit.prevent="handleRegister" class="register-form">
-        <!-- Tipo de usuario -->
-        <div class="input-group">
-          <label>👤 ¿Quién eres?</label>
-          <div class="user-type-selection">
-            <div
-                @click="formData.tipo = 'student'"
-                :class="['user-type-card', { active: formData.tipo === 'student' }]"
-            >
-              <div class="type-icon">👨‍🎓</div>
-              <h3>Estudiante</h3>
-              <p>Quiero crear y leer historias</p>
+        <fieldset :disabled="authStore.loading">
+          <!-- Tipo de usuario -->
+          <div class="input-group">
+            <label>👤 ¿Quién eres?</label>
+            <div class="user-type-selection">
+              <div
+                  @click="formData.tipo = 'student'"
+                  :class="['user-type-card', { active: formData.tipo === 'student' }]"
+              >
+                <div class="type-icon">👨‍🎓</div>
+                <h3>Estudiante</h3>
+                <p>Quiero crear y leer historias</p>
+              </div>
+              <div
+                  @click="formData.tipo = 'teacher'"
+                  :class="['user-type-card', { active: formData.tipo === 'teacher' }]"
+              >
+                <div class="type-icon">👨‍🏫</div>
+                <h3>Docente</h3>
+                <p>Quiero gestionar estudiantes</p>
+              </div>
             </div>
-            <div
-                @click="formData.tipo = 'teacher'"
-                :class="['user-type-card', { active: formData.tipo === 'teacher' }]"
-            >
-              <div class="type-icon">👨‍🏫</div>
-              <h3>Docente</h3>
-              <p>Quiero gestionar estudiantes</p>
+          </div>
+
+          <!-- Información básica -->
+          <div class="input-group">
+            <label for="nombre">📝 Nombre completo</label>
+            <input
+                id="nombre"
+                v-model="formData.nombre"
+                type="text"
+                placeholder="Tu nombre completo"
+                required
+            />
+          </div>
+
+          <div class="input-group">
+            <label for="email">📧 Email</label>
+            <input
+                id="email"
+                v-model="formData.email"
+                type="email"
+                placeholder="tu-email@ejemplo.com"
+                required
+            />
+          </div>
+
+          <div class="input-group">
+            <label for="password">🔒 Contraseña</label>
+            <input
+                id="password"
+                v-model="formData.password"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Mínimo 8, mayúscula, minúscula, número y símbolo"
+                required
+                :pattern="passwordPattern"
+                title="Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo"
+            />
+
+            <!-- Indicador de fuerza -->
+            <div class="password-strength">
+              <div class="strength-track">
+                <div
+                    class="strength-bar"
+                    :class="passwordStrength.level"
+                    :style="{ width: passwordStrength.percent + '%' }"
+                ></div>
+              </div>
+              <small class="strength-text" :class="passwordStrength.level" aria-live="polite">
+                {{ passwordStrength.label }}
+              </small>
+            </div>
+
+            <!-- Checklist de requisitos -->
+            <ul class="pw-rules">
+              <li :class="{ ok: pwRules.len }">≥ 8 caracteres</li>
+              <li :class="{ ok: pwRules.upper }">1 mayúscula (A-Z)</li>
+              <li :class="{ ok: pwRules.lower }">1 minúscula (a-z)</li>
+              <li :class="{ ok: pwRules.num }">1 número (0-9)</li>
+              <li :class="{ ok: pwRules.sym }">1 símbolo (p. ej. !@#.-_)</li>
+            </ul>
+          </div>
+          <!-- Campos específicos para alumnos -->
+          <div v-if="formData.tipo === 'student'" class="alumno-fields">
+            <div class="input-group">
+              <label for="birth_date">🎂 Fecha de nacimiento</label>
+              <input
+                  id="birth_date"
+                  v-model="formData.birth_date"
+                  type="date"
+                  required
+              />
+            </div>
+
+            <div class="input-group">
+              <label for="grado">🏫 Grado escolar</label>
+              <select id="grado" v-model="formData.grado" required>
+                <option value="">Selecciona tu grado</option>
+                <option v-for="grado in gradosDisponibles" :key="grado" :value="grado">
+                  {{ grado }}
+                </option>
+              </select>
             </div>
           </div>
-        </div>
 
-        <!-- Información básica -->
-        <div class="input-group">
-          <label for="nombre">📝 Nombre completo</label>
-          <input
-              id="nombre"
-              v-model="formData.nombre"
-              type="text"
-              placeholder="Tu nombre completo"
-              required
-          />
-        </div>
+          <!-- Campos específicos para docentes -->
+          <div v-if="formData.tipo === 'teacher'" class="docente-fields">
+            <div class="input-group">
+              <label for="institucion">🏫 Institución educativa</label>
+              <input
+                  id="institucion"
+                  v-model="formData.institucion"
+                  type="text"
+                  placeholder="Nombre de tu colegio/escuela"
+                  required
+              />
+            </div>
 
-        <div class="input-group">
-          <label for="email">📧 Email</label>
-          <input
-              id="email"
-              v-model="formData.email"
-              type="email"
-              placeholder="tu-email@ejemplo.com"
-              required
-          />
-        </div>
+            <div class="input-group">
+              <label for="alma_mater">🎓 Alma Mater</label>
+              <input
+                  id="alma_mater"
+                  v-model="formData.alma_mater"
+                  type="text"
+                  placeholder="Ejemplo: Universidad de Lima"
+                  required
+              />
+            </div>
 
-        <div class="input-group">
-          <label for="password">🔒 Contraseña</label>
-          <input
-              id="password"
-              v-model="formData.password"
-              type="password"
-              placeholder="Mínimo 6 caracteres"
-              required
-              minlength="6"
-          />
-        </div>
+            <div class="input-group">
+              <label for="degree_level">📜 Nivel académico</label>
+              <input
+                  id="degree_level"
+                  v-model="formData.degree_level"
+                  type="text"
+                  placeholder="Ejemplo: Licenciatura, Maestría"
+                  required
+              />
+            </div>
 
-        <!-- Campos específicos para alumnos -->
-        <div v-if="formData.tipo === 'student'" class="alumno-fields">
-          <div class="input-group">
-            <label for="birth_date">🎂 Fecha de nacimiento</label>
-            <input
-                id="birth_date"
-                v-model="formData.birth_date"
-                type="date"
-                required
-            />
+            <div class="input-group">
+              <label for="degree_level">Especialización</label>
+              <input
+                  id="degree_level"
+                  v-model="formData.major"
+                  type="text"
+                  placeholder="Ejemplo: Magister en Educación"
+                  required
+              />
+            </div>
           </div>
 
-          <div class="input-group">
-            <label for="grado">🏫 Grado escolar</label>
-            <select id="grado" v-model="formData.grado" required>
-              <option value="">Selecciona tu grado</option>
-              <option v-for="grado in gradosDisponibles" :key="grado" :value="grado">
-                {{ grado }}
-              </option>
-            </select>
+          <!-- Mensajes de error -->
+          <div v-if="authStore.error" class="error">
+            {{ authStore.error }}
           </div>
-        </div>
-
-        <!-- Campos específicos para docentes -->
-        <div v-if="formData.tipo === 'teacher'" class="docente-fields">
-          <div class="input-group">
-            <label for="institucion">🏫 Institución educativa</label>
-            <input
-                id="institucion"
-                v-model="formData.institucion"
-                type="text"
-                placeholder="Nombre de tu colegio/escuela"
-                required
-            />
+          <div v-if="formError" class="error">
+            {{ formError }}
           </div>
 
-          <div class="input-group">
-            <label for="alma_mater">🎓 Alma Mater</label>
-            <input
-                id="alma_mater"
-                v-model="formData.alma_mater"
-                type="text"
-                placeholder="Ejemplo: Universidad de Lima"
-                required
-            />
-          </div>
-
-          <div class="input-group">
-            <label for="degree_level">📜 Nivel académico</label>
-            <input
-                id="degree_level"
-                v-model="formData.degree_level"
-                type="text"
-                placeholder="Ejemplo: Licenciatura, Maestría"
-                required
-            />
-          </div>
-
-          <div class="input-group">
-            <label for="degree_level">Especialización</label>
-            <input
-                id="degree_level"
-                v-model="formData.major"
-                type="text"
-                placeholder="Ejemplo: Magister en Educación"
-                required
-            />
-          </div>
-        </div>
-
-        <div v-if="authStore.error" class="error">
-          {{ authStore.error }}
-        </div>
-
-        <button type="submit" class="btn-register" :disabled="!isFormValid || authStore.loading">
-          <span v-if="authStore.loading">⏳ Creando cuenta...</span>
-          <span v-else>🚀 Crear Mi Cuenta</span>
-        </button>
+          <!-- Botón con loading -->
+          <button
+              type="submit"
+              class="btn-register"
+              :disabled="!isFormValid || authStore.loading"
+          >
+            <span v-if="authStore.loading">⏳ Creando cuenta...</span>
+            <span v-else>🚀 Crear Mi Cuenta</span>
+          </button>
+        </fieldset>
       </form>
-
       <div class="register-footer">
         <p>¿Ya tienes cuenta?</p>
         <router-link to="/login" class="btn-login">
           🔑 Iniciar Sesión
         </router-link>
+      </div>
+      <!-- Overlay de carga -->
+      <div v-if="authStore.loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Creando tu cuenta, espera un momento...</p>
       </div>
     </div>
   </div>
@@ -171,13 +210,54 @@ export default {
       nombre: '',
       email: '',
       password: '',
-      birth_date: '',   // cambiado de edad → birth_date (tipo date)
+      birth_date: '',
       grado: '',
       institucion: '',
       alma_mater: '',
       degree_level: '',
       major: ''
     })
+
+    const formError = ref('')
+    // ✅ Reglas individuales (regex amplia para símbolo: cualquier no alfanumérico)
+    const pw = computed(() => formData.value.password || '')
+    const pwRules = computed(() => ({
+      lower: /[a-z]/.test(pw.value),
+      upper: /[A-Z]/.test(pw.value),
+      num: /\d/.test(pw.value),
+      sym: /[^A-Za-z0-9]/.test(pw.value),  // ← clave: símbolo amplio (#.-_ también cuentan)
+      len: pw.value.length >= 8
+    }))
+
+    // ✅ Patrón del input para validación nativa (opcional pero útil)
+    const passwordPattern = computed(() => '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$')
+
+    // ✅ Fuerza calculada automáticamente (sin depender de eventos)
+    const passwordStrength = computed(() => {
+      const score = Object.values(pwRules.value).filter(Boolean).length // 0..5
+      if (score <= 2) return { level: 'weak',   percent: 33, label: 'Contraseña débil' }
+      if (score <= 4) return { level: 'medium', percent: 66, label: 'Contraseña media' }
+      return { level: 'strong', percent: 100, label: 'Contraseña fuerte' }
+    })
+
+    const checkPasswordStrength = () => {
+      const pwd = formData.value.password
+      if (!pwd) {
+        passwordStrength.value = ''
+        return
+      }
+
+      let score = 0
+      if (/[a-z]/.test(pwd)) score++
+      if (/[A-Z]/.test(pwd)) score++
+      if (/\d/.test(pwd)) score++
+      if (/[@$!%*?&]/.test(pwd)) score++
+      if (pwd.length >= 8) score++
+
+      if (score <= 2) passwordStrength.value = 'weak'
+      else if (score <= 4) passwordStrength.value = 'medium'
+      else passwordStrength.value = 'strong'
+    }
 
     const gradosDisponibles = computed(() => [
       '1° Primaria', '2° Primaria', '3° Primaria', '4° Primaria', '5° Primaria', '6° Primaria',
@@ -193,7 +273,6 @@ export default {
       } else if (formData.value.tipo === 'teacher') {
         return baseValid && formData.value.institucion && formData.value.alma_mater && formData.value.degree_level && formData.value.major
       }
-
       return baseValid
     })
 
@@ -203,13 +282,14 @@ export default {
     })
 
     const handleRegister = async () => {
+      formError.value = ''
       if (!isFormValid.value) {
-        authStore.error = 'Por favor completa todos los campos requeridos'
+        formError.value = 'Por favor completa todos los campos requeridos'
         return
       }
 
-      if (formData.value.password.length < 6) {
-        authStore.error = 'La contraseña debe tener al menos 6 caracteres'
+      if (passwordStrength.value === 'weak') {
+        formError.value = 'La contraseña es demasiado débil'
         return
       }
 
@@ -223,7 +303,7 @@ export default {
 
         if (formData.value.tipo === 'student') {
           userData.student_profile = {
-            birth_date: formData.value.birth_date,   // ahora se envía como fecha
+            birth_date: formData.value.birth_date,
             current_grade: formData.value.grado
           }
         } else if (formData.value.tipo === 'teacher') {
@@ -234,12 +314,21 @@ export default {
             major: formData.value.major
           }
         }
-        console.log('this is userData: ', userData)
+
         await authStore.register(userData)
         redirectToDashboard()
 
       } catch (error) {
         console.error('❌ Error en registro:', error)
+
+        // Normalización de errores
+        if (error.response?.status === 409) {
+          authStore.error.value = 'El correo ya está registrado'
+        } else if (error.response?.status >= 500) {
+          authStore.error.value = 'Error en el servidor, inténtalo más tarde'
+        } else {
+          authStore.error.value = 'Error inesperado en el registro'
+        }
       }
     }
 
@@ -254,13 +343,189 @@ export default {
       authStore,
       gradosDisponibles,
       isFormValid,
-      handleRegister
+      handleRegister,
+      formError,
+      passwordStrength,
+      passwordPattern,
+      pwRules,
+      checkPasswordStrength
     }
   }
 }
 </script>
 
 <style scoped>
+/* Quitar marco por defecto del fieldset */
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+/* Barra de fuerza */
+.password-strength {
+  margin-top: 6px;
+}
+
+.strength-track {
+  width: 100%;
+  height: 6px;
+  background: #eaeaea;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.strength-bar {
+  height: 6px;
+  width: 0%;
+  transition: width 220ms ease, background-color 220ms ease;
+}
+
+.strength-bar.weak   { background-color: #e74c3c; } /* rojo */
+.strength-bar.medium { background-color: #f39c12; } /* ámbar */
+.strength-bar.strong { background-color: #2ecc71; } /* verde */
+
+.strength-text {
+  font-size: 0.85rem;
+  color: #666;
+}
+.strength-text.weak   { color: #e74c3c; }
+.strength-text.medium { color: #f39c12; }
+.strength-text.strong { color: #2ecc71; }
+
+/* Checklist de requisitos */
+.pw-rules {
+  list-style: none;
+  padding: 6px 0 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  font-size: 0.85rem;
+  color: #777;
+}
+.pw-rules li {
+  position: relative;
+  padding-left: 18px;
+}
+.pw-rules li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  top: 0;
+  line-height: 1;
+  color: #bbb;
+}
+.pw-rules li.ok {
+  color: #2ecc71;
+}
+.pw-rules li.ok::before {
+  content: '✓';
+  color: #2ecc71;
+}
+
+/* Overlay de carga (ya lo tenías, incluyo por si faltaba) */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  text-align: center;
+  padding: 16px;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.password-strength {
+  margin-top: 5px;
+}
+
+.strength-bar {
+  height: 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.strength-bar.weak {
+  width: 30%;
+  background: #e74c3c;
+}
+
+.strength-bar.medium {
+  width: 60%;
+  background: #f39c12;
+}
+
+.strength-bar.strong {
+  width: 100%;
+  background: #2ecc71;
+}
+
+.strength-text {
+  font-size: 0.8rem;
+}
+
+.strength-text.weak {
+  color: #e74c3c;
+}
+
+.strength-text.medium {
+  color: #f39c12;
+}
+
+.strength-text.strong {
+  color: #2ecc71;
+}
+
+.error {
+  color: #e74c3c;
+  margin-top: 5px;
+  font-size: 0.9rem;
+}
+
 .register-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
