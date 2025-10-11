@@ -107,7 +107,6 @@
         </div>
 
         <h3>{{ loadingTitulo }}</h3>
-        <p class="tiempo-estimado">{{ loadingSubtitulo }}</p>
 
         <ul class="loading-steps">
           <li v-for="(step, index) in loadingSteps" :key="index"
@@ -432,7 +431,6 @@ export default {
     ];
     const loadingPaso = ref(0);
     const loadingTitulo = ref("🤖 Preparando generación...");
-    const loadingSubtitulo = ref("Esto puede tardar entre 20 y 40 segundos");
 
     const actualizarPaso = (titulo, paso) => {
       loadingTitulo.value = titulo;
@@ -490,7 +488,6 @@ export default {
       generando.value = true;
       loadingPaso.value = 0;
       loadingTitulo.value = "🤖 Iniciando generación de historia...";
-      loadingSubtitulo.value = "Esto puede tardar entre 20 y 40 segundos";
 
       try {
         // Simulación de fases progresivas
@@ -758,7 +755,6 @@ export default {
       loadingSteps,
       actualizarPaso,
       loadingPaso,
-      loadingSubtitulo,
       loadingTitulo
 
     }

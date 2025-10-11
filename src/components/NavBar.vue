@@ -1,5 +1,3 @@
-// 🚨 REEMPLAZA COMPLETAMENTE TU NavBar.vue CON ESTO:
-
 <template>
   <nav class="navbar">
     <div class="nav-container">
@@ -39,11 +37,11 @@
               📊 Reportes ▼
             </span>
             <div class="dropdown-menu">
-              <button @click="descargarReporteGeneral" class="dropdown-item">
+              <button @click="descargarReporteGeneral" class="dropdown-item" :disabled="loadingReporte">
                 📄 Reporte General
               </button>
-              <button @click="verAvanceGrupal" class="dropdown-item">
-                📈 Avance Grupal
+              <button @click="descargarReporteGrupal" class="dropdown-item" :disabled="loadingReporte">
+                👥 Reporte Grupal
               </button>
             </div>
           </div>
@@ -79,6 +77,11 @@
       </div>
     </div>
   </nav>
+  <div v-if="loadingReporte" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>🧾 Generando reporte PDF, por favor espera...</p>
+  </div>
+
 </template>
 
 <script>
@@ -86,6 +89,8 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import apiService from '../services/api'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default {
   name: 'NavBar',
@@ -145,43 +150,83 @@ export default {
     // ============================================================================
     // 🎓 MÉTODOS ESPECÍFICOS PARA DOCENTES
     // ============================================================================
-    
-    const descargarReporteGeneral = async () => {
-      try {
-        console.log('📄 Descargando reporte general...')
-        
-        if (!authStore.profile?.id) {
-          console.error('❌ No se encontró ID del docente')
-          return
-        }
-        
-        // ✅ USAR APISERVICE CORREGIDO
-        const response = await apiService.descargarReporteDocente(authStore.profile.id)
-        
-        // ✅ CREAR Y DESCARGAR EL PDF
-        const url = window.URL.createObjectURL(response.data)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `reporte_general_${authStore.user.nombre}_${new Date().toISOString().split('T')[0]}.pdf`
-        
-        // ✅ EJECUTAR DESCARGA
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-        
-        console.log('✅ Reporte PDF descargado exitosamente')
-        
-      } catch (error) {
-        console.error('❌ Error descargando reporte:', error)
-        alert('Error al descargar el reporte: ' + error.message)
-      }
-      closeUserMenu()
+
+    const loadingReporte = ref(false)
+
+    const generarPDF = (titulo, estudiantes) => {
+      const doc = new jsPDF()
+      const fecha = new Date().toLocaleDateString()
+
+      doc.setFontSize(16)
+      doc.text(titulo, 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Generado el ${fecha}`, 14, 28)
+
+      const rows = estudiantes.map(e => [
+        e.fullname,
+        e.email || '-',
+        e.current_grade || '-',
+        e.total_historias || 0,
+        e.total_points || 0,
+        e.current_level || '-',
+        e.matriculado ? 'Sí' : 'No'
+      ])
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['Nombre', 'Email', 'Grado', 'Historias', 'Puntos', 'Nivel', 'Matriculado']],
+        body: rows,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [52, 152, 219] }
+      })
+
+      const filename = `${titulo.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+      doc.save(filename)
     }
-    
-    const verAvanceGrupal = () => {
-      router.push('/dashboard-docente?tab=avance')
-      closeUserMenu()
+
+    const descargarReporteGeneral = async () => {
+      loadingReporte.value = true
+      try {
+        console.log('📄 Generando Reporte General...')
+        const docenteId = authStore.profile.id
+        const resp = await apiService.obtenerEstudiantesDocente(docenteId)
+        const estudiantes = (Array.isArray(resp) ? resp : resp?.estudiantes ?? []).map(e => ({
+          ...e,
+          matriculado: e.matriculado === true
+        }))
+        generarPDF('Reporte General de Estudiantes', estudiantes)
+        console.log('✅ Reporte General generado')
+      } catch (error) {
+        console.error('❌ Error generando Reporte General:', error)
+        alert('Error generando reporte general')
+      } finally {
+        loadingReporte.value = false
+        closeUserMenu()
+      }
+    }
+
+    const descargarReporteGrupal = async () => {
+      loadingReporte.value = true
+      try {
+        console.log('Generando Reporte Grupal...')
+        const docenteId = authStore.profile.id
+        const resp = await apiService.obtenerEstudiantesDocente(docenteId)
+        const estudiantes = (Array.isArray(resp) ? resp : resp?.estudiantes ?? [])
+            .filter(e => e.matriculado === true)
+            .map(e => ({
+              ...e,
+              matriculado: true
+            }))
+
+        generarPDF('Reporte Grupal (Alumnos Matriculados)', estudiantes)
+        console.log('✅ Reporte Grupal generado')
+      } catch (error) {
+        console.error('❌ Error generando Reporte Grupal:', error)
+        alert('Error generando reporte grupal')
+      } finally {
+        loadingReporte.value = false
+        closeUserMenu()
+      }
     }
     
     // ============================================================================
@@ -212,7 +257,8 @@ export default {
       toggleUserMenu,
       closeUserMenu,
       descargarReporteGeneral,
-      verAvanceGrupal
+      descargarReporteGrupal,
+      loadingReporte
     }
   }
 }
@@ -222,6 +268,32 @@ export default {
 /* ============================================================================ */
 /* 🎨 ESTILOS PRINCIPALES */
 /* ============================================================================ */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+.loading-spinner {
+  border: 4px solid #ddd;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
 .navbar {
   background: rgba(255, 255, 255, 0.95);
