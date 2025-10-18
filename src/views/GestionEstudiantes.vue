@@ -165,10 +165,18 @@
                     <!-- Matricular / Desmatricular -->
                     <button
                         @click="toggleMatricula(estudiante)"
-                        class="dropdown-item"
+                        class="dropdown-item matricula-btn"
+                        :class="{
+                            'matricular': !estudiante.matriculado && !estudiante.cargandoMatricula,
+                            'desmatricular': estudiante.matriculado && !estudiante.cargandoMatricula,
+                            'cargando': estudiante.cargandoMatricula
+                          }"
+                        :disabled="estudiante.cargandoMatricula"
                     >
                       <span v-if="estudiante.cargandoMatricula">⏳ Procesando...</span>
-                      {{ estudiante.matriculado ? '🚫 Desmatricular' : '✅ Matricular' }}
+                      <span v-else>
+                        {{ estudiante.matriculado ? '🚫 Desmatricular' : '✅ Matricular' }}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -210,10 +218,18 @@
               </button>
               <button
                   @click="toggleMatricula(estudiante)"
-                  class="btn-tarjeta matricular"
+                  class="btn-tarjeta"
+                  :class="{
+                    'btn-matricular': !estudiante.matriculado && !estudiante.cargandoMatricula,
+                    'btn-desmatricular': estudiante.matriculado && !estudiante.cargandoMatricula,
+                    'btn-cargando': estudiante.cargandoMatricula
+                  }"
+                  :disabled="estudiante.cargandoMatricula"
               >
                 <span v-if="estudiante.cargandoMatricula">⏳ Procesando...</span>
-                {{ estudiante.matriculado ? '🚫 Desmatricular' : '✅ Matricular' }}
+                <span v-else>
+                  {{ estudiante.matriculado ? '🚫 Desmatricular' : '✅ Matricular' }}
+                </span>
               </button>
             </div>
           </div>
@@ -802,6 +818,76 @@ const refrescarEstudiantes = () => {
 </script>
 
 <style scoped>
+/* --- Matricula / Desmatricula UI --- */
+.matricula-btn {
+  width: 100%;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  margin-top: 5px;
+  padding: 10px 15px;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.matricula-btn.matricular {
+  background: #28a745;
+  color: white;
+}
+
+.matricula-btn.matricular:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.matricula-btn.desmatricular {
+  background: #dc3545;
+  color: white;
+}
+
+.matricula-btn.desmatricular:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+.matricula-btn.cargando {
+  background: #adb5bd;
+  color: white;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+/* --- Tarjetas --- */
+.btn-matricular {
+  background: linear-gradient(45deg, #28a745, #34ce57);
+  color: white;
+  font-weight: 600;
+}
+
+.btn-desmatricular {
+  background: linear-gradient(45deg, #dc3545, #e4606d);
+  color: white;
+  font-weight: 600;
+}
+
+.btn-cargando {
+  background: #adb5bd;
+  color: white;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.btn-matricular:hover {
+  background: linear-gradient(45deg, #218838, #28a745);
+  transform: translateY(-2px);
+}
+
+.btn-desmatricular:hover {
+  background: linear-gradient(45deg, #c82333, #dc3545);
+  transform: translateY(-2px);
+}
+
+
 /* Estilos base similares a los otros componentes */
 .gestion-estudiantes-container {
   min-height: 100vh;

@@ -7,7 +7,7 @@
         <button @click="volverAtras" class="btn-back">
           ← Volver
         </button>
-        <h1>🏆 Ranking de la Clase</h1>
+        <h1>🏆 Ranking del Salón</h1>
         <p>Ve cómo te comparas con tus compañeros</p>
       </div>
       
@@ -180,7 +180,7 @@
           <div class="stat-card">
             <div class="stat-icon">🎯</div>
             <h3>{{ estadisticas.promedioClase || 0 }}%</h3>
-            <p>Precisión promedio de la clase</p>
+            <p>Precisión promedio del salón</p>
           </div>
           
           <div class="stat-card">

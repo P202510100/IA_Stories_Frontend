@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
-          <h1>📚 Mis Historias</h1>
+          <h1>Mis Historias</h1>
           <p>Todas las aventuras que has vivido</p>
         </div>
         <div class="header-actions">
@@ -205,6 +205,10 @@
         </button>
       </div>
 
+    </div>
+    <div v-if="loadingExport" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p>🧾 Generando reporte detallado, por favor espera...</p>
     </div>
   </div>
 </template>
@@ -434,38 +438,164 @@ export default {
     // ============================================================================
 
     async function exportarHistorial() {
-      loadingExport.value = true
+      loadingExport.value = true;
       try {
-        const doc = new jsPDF()
+        const doc = new jsPDF({ unit: "mm", format: "a4" });
+        const MARGIN_X = 15;
+        const RIGHT = 195;
+        const WRAP_W = 175;
+        let y = 20;
 
-        doc.setFontSize(18)
-        doc.text("Historial de Historias", 14, 20)
+        // Utilidades ASCII-safe
+        const idxToLetter = (idx) => String.fromCharCode(65 + Number(idx)); // 0->A, 1->B, ...
+        const normalizeIndex = (ans) => {
+          if (ans === null || ans === undefined) return null;
+          if (typeof ans === "number") return ans;
+          const s = String(ans).trim();
+          if (/^\d+$/.test(s)) return parseInt(s, 10);            // "1" -> 1
+          if (/^[a-z]$/i.test(s)) return s.toLowerCase().charCodeAt(0) - 97; // "b" -> 1
+          return null;
+        };
+        const stripLeadingLetter = (txt) =>
+            String(txt).replace(/^\s*[A-Za-z]\)\s*/, ""); // quita "A) ", "b) ", etc.
 
-        const rows = historias.value.map((h, i) => [
-          i + 1,
-          h.titulo,
-          getTemaLabel(h.tema),
-          formatDate(h.created_at),
-          `${h.respondidas}/${h.total_preguntas}`,
-          h.puntos_obtenidos ?? 0,
-          `${getProgressPercent(h)}%`
-        ])
+        const drawWrap = (text, x, y0, width) => {
+          const lines = doc.splitTextToSize(text, width);
+          lines.forEach((ln) => {
+            if (y > 270) { doc.addPage(); y = 20; }
+            doc.text(ln, x, y);
+            y += 5;
+          });
+          return y;
+        };
+        const hr = () => { doc.setDrawColor(200); doc.line(MARGIN_X, y, RIGHT, y); y += 8; };
+        const checkPage = () => { if (y > 270) { doc.addPage(); y = 20; } };
 
-        autoTable(doc, {
-          head: [["#", "Título", "Tema", "Fecha", "Preguntas", "Puntos", "Progreso"]],
-          body: rows,
-          startY: 30,
-        })
+        // Header
+        const alumno = profile.value || {};
+        doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+        doc.text("Reporte Detallado de Historias", MARGIN_X, y); y += 10;
 
-        doc.save("mis_historias.pdf")
+        doc.setFont("helvetica", "normal"); doc.setFontSize(12);
+        y = drawWrap(`Alumno: ${alumno.fullname || "-"}`, MARGIN_X, y, WRAP_W);
+        y = drawWrap(`Email: ${alumno.email || "-"}`, MARGIN_X, y, WRAP_W);
+        y = drawWrap(`Docente: ${alumno.teacher_name || "No asignado"}`, MARGIN_X, y, WRAP_W);
+        y = drawWrap(`Matriculado: ${alumno.matriculado ? "Sí" : "No"}`, MARGIN_X, y, WRAP_W);
+        y = drawWrap(`Generado: ${new Date().toLocaleString("es-ES")}`, MARGIN_X, y, WRAP_W);
+        hr();
 
+        // Historias
+        for (const [ix, h] of historias.value.entries()) {
+          checkPage();
+          doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+          y = drawWrap(`${ix + 1}. ${h.titulo}`, MARGIN_X, y, WRAP_W);
+
+          doc.setFont("helvetica", "italic"); doc.setFontSize(11);
+          y = drawWrap(`Tema: ${getTemaLabel(h.tema)} | Fecha: ${formatDate(h.created_at)}`, MARGIN_X, y, WRAP_W);
+
+          doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+          y = drawWrap(`Puntos: ${h.puntos_obtenidos ?? 0} | Estado: ${h.status}`, MARGIN_X, y, WRAP_W);
+          y += 2;
+
+          // Texto de la historia
+          doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+          y = drawWrap(h.contenido || "Sin contenido", MARGIN_X, y, WRAP_W);
+          hr();
+
+          // Preguntas
+          try {
+            const det = await api.cargarHistoriaPorId(h.recorId);
+            const preguntas = det?.story?.question_answer ?? [];
+            const respuestas = det?.answers ?? []; // [{question_index, response}, ...]
+
+            if (preguntas.length) {
+              doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+              y = drawWrap("Preguntas y respuestas", MARGIN_X, y, WRAP_W);
+
+              preguntas.forEach((q, i) => {
+                checkPage();
+
+                // Título de pregunta
+                doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                y = drawWrap(`${i + 1}. ${q.question}`, MARGIN_X, y, WRAP_W);
+
+                // Normalizar CORRECTA (puede venir 1 o "a")
+                const correctIdx = normalizeIndex(q.answer);
+                const correctLetter = correctIdx !== null ? idxToLetter(correctIdx) : "-";
+
+                // Respuesta marcada del alumno (puede ser índice, letra o texto)
+                const rawAlumno = respuestas.find(a => a.question_index === i)?.response ?? null;
+
+                // Determinar índice marcado si se puede
+                let markedIdx = null;
+                if (rawAlumno !== null) {
+                  // Si coincide por índice/letra
+                  const maybeIdx = normalizeIndex(rawAlumno);
+                  if (maybeIdx !== null) markedIdx = maybeIdx;
+                  else {
+                    // Si vino como texto completo, buscar match con opción
+                    const t = String(rawAlumno).trim().toLowerCase();
+                    const found = (q.options || []).findIndex(op => String(op).trim().toLowerCase() === t);
+                    markedIdx = found >= 0 ? found : null;
+                  }
+                }
+                const markedLetter = markedIdx !== null ? idxToLetter(markedIdx) : "-";
+
+                // Opciones: imprimimos A) ... ; marcamos con sufijos ASCII [MARCADA], [CORRECTA]
+                doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                (q.options || []).forEach((op, idx) => {
+                  checkPage();
+                  const cleanText = stripLeadingLetter(op);
+                  const letter = idxToLetter(idx);
+                  const isMarked = markedIdx === idx;
+                  const isCorrect = correctIdx === idx;
+
+                  // 100% ASCII para evitar símbolos raros
+                  let suffix = "";
+                  if (isCorrect && isMarked) suffix = "  [CORRECTA][MARCADA]";
+                  else if (isCorrect)       suffix = "  [CORRECTA]";
+                  else if (isMarked)        suffix = "  [MARCADA]";
+
+                  y = drawWrap(`${letter}) ${cleanText}${suffix}`, MARGIN_X + 6, y, WRAP_W - 6);
+                });
+
+                // Líneas “Respuesta marcada” y “Correcta” (sin duplicar la alternativa)
+                const correctText = correctIdx !== null && q.options?.[correctIdx]
+                    ? stripLeadingLetter(q.options[correctIdx])
+                    : "-";
+
+                doc.setFont("helvetica", "italic"); doc.setFontSize(9);
+                y = drawWrap(`-> Respuesta marcada: ${markedLetter}`, MARGIN_X + 6, y, WRAP_W - 6);
+                y = drawWrap(`-> Correcta: (${correctLetter}) ${correctText}`, MARGIN_X + 6, y, WRAP_W - 6);
+                y += 4;
+              });
+            } else {
+              doc.setFont("helvetica", "italic"); doc.setFontSize(10);
+              y = drawWrap("Esta historia no tiene preguntas registradas.", MARGIN_X, y, WRAP_W);
+            }
+          } catch (e) {
+            doc.setFont("helvetica", "italic"); doc.setFontSize(10);
+            y = drawWrap("No se pudieron obtener las preguntas de esta historia.", MARGIN_X, y, WRAP_W);
+            console.error("Detalle historia error:", e);
+          }
+
+          hr();
+        }
+
+        // Footer
+        doc.setFont("helvetica", "italic"); doc.setFontSize(10);
+        doc.text("Generado por IAStories", MARGIN_X, 285);
+
+        const filename = `reporte_detallado_${(alumno.fullname || "alumno").replace(/\s+/g, "_")}.pdf`;
+        doc.save(filename);
       } catch (err) {
-        console.error("❌ Error exportando PDF:", err)
-        error.value = "Error exportando el historial"
+        console.error("Export PDF error:", err);
+        error.value = "Error al exportar el PDF.";
       } finally {
-        loadingExport.value = false
+        loadingExport.value = false;
       }
     }
+
 
     // ============================================================================
     // 🧭 NAVEGACIÓN Y ACCIONES
@@ -589,6 +719,33 @@ export default {
 </script>
 
 <style scoped>
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,0.85);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+.loading-spinner {
+  border: 4px solid #ddd;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .completado {
   background-color: #4caf50;
   color: white;
