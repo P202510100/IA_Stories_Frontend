@@ -1,8 +1,7 @@
-
 <template>
   <div class="detalle-estudiante-container">
     <div class="container">
-      
+
       <!-- Loading principal -->
       <div v-if="loading && !estudiante" class="loading-principal">
         <div class="loading-spinner"></div>
@@ -14,14 +13,14 @@
         <button @click="volverDashboard" class="btn-back">
           ← Volver al Dashboard
         </button>
-        
+
         <div class="estudiante-principal">
           <div class="estudiante-avatar-grande">
-            {{ getInitials(estudiante.nombre) }}
+            {{ getInitials(estudiante.fullname) }}
           </div>
-          
+
           <div class="estudiante-datos">
-            <h1>{{ estudiante.nombre }}</h1>
+            <h1>{{ estudiante.fullname }}</h1>
             <p class="estudiante-email">{{ estudiante.email }}</p>
             <div class="estudiante-meta">
               <div class="meta-item">
@@ -30,7 +29,7 @@
               </div>
               <div class="meta-item">
                 <span class="meta-label">📅 Registro:</span>
-                <span class="meta-value">{{ formatDate(estudiante.created_at) }}</span>
+                <span class="meta-value">{{ formatTiempoPromedio(estudiante.created_at) }}</span>
               </div>
               <div class="meta-item">
                 <span class="meta-label">🎯 Nivel:</span>
@@ -41,12 +40,12 @@
             </div>
             <div class="ultima-actividad">
               <span class="actividad-icon">⏰</span>
-              <span>Última actividad: {{ formatDate(estudiante.ultima_actividad) }}</span>
+              <span>Última actividad: {{ formatTiempoPromedio(estudiante.last_updated_date) }}</span>
             </div>
           </div>
         </div>
       </div>
-      
+
       <!-- Estadísticas principales -->
       <div v-if="estadisticas" class="estadisticas-section">
         <h2>📊 Resumen de Rendimiento</h2>
@@ -214,7 +213,7 @@
               <h3 class="historia-titulo">{{ historia.titulo }}</h3>
               <p class="historia-meta">
                 <span class="meta-tema">{{ formatTema(historia.tema) }}</span>
-                <span class="meta-fecha">{{ formatDate(historia.created_at) }}</span>
+                <span class="meta-fecha">{{ formatTiempoPromedio(historia.created_at) }}</span>
               </p>
               
               <!-- Estadísticas de la historia -->
@@ -304,6 +303,8 @@ import { useToastStore } from '../components/ToastNotification.vue'
 import apiService from '../services/api'
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import { formatTema, getEmojiTema, formatTiempoPromedio } from '../utils/formatters'
+import { calcularNivel, getNivelClase } from '../utils/levels'
 
 export default {
   name: 'DetalleEstudiante',
@@ -312,11 +313,12 @@ export default {
     const router = useRouter()
     const authStore = useAuthStore()
     const toastStore = useToastStore()
-    
+    const studentProfile = ref({})
+
     // ============================================================================
     // 📊 ESTADOS REACTIVOS
     // ============================================================================
-    
+
     const estadisticas = ref(null)
     const progresoTemas = ref([])
     const historias = ref([])
@@ -331,35 +333,35 @@ export default {
     // Filtros y ordenamiento
     const filtroTema = ref('')
     const ordenHistorias = ref('reciente')
-    
+
     // ============================================================================
     // 🔄 COMPUTED PROPERTIES
     // ============================================================================
-    
+
     const profile = computed(() => authStore.profile)
-    const estudiante = computed(() => parseInt(route.params.id))
-    const studentProfile = ref({})
-    
+    const estudianteId = computed(() => parseInt(route.params.id))
+    const estudiante = ref({})
+
     const nivelActual = computed(() => {
       if (!estadisticas.value?.puntos_totales) {
         return { nombre: 'Explorador', icono: '🌱', color: '#4caf50' }
       }
       return calcularNivel(estadisticas.value.puntos_totales)
     })
-    
+
     const temasDisponibles = computed(() => {
       const temas = new Set(historias.value.map(h => h.tema))
       return Array.from(temas).sort()
     })
-    
+
     const historiasFiltradas = computed(() => {
       let resultado = [...historias.value]
-      
+
       // Filtrar por tema
       if (filtroTema.value) {
         resultado = resultado.filter(h => h.tema === filtroTema.value)
       }
-      
+
       // Ordenar
       switch (ordenHistorias.value) {
         case 'reciente':
@@ -375,32 +377,34 @@ export default {
           resultado.sort((a, b) => a.titulo.localeCompare(b.titulo))
           break
       }
-      
+
       return resultado
     })
-    
+
     // ============================================================================
     // 🔄 MÉTODOS PRINCIPALES
     // ============================================================================
-    
+
     const cargarDatosEstudiante = async () => {
       try {
         loading.value = true
         error.value = null
-        
+
         if (!profile.value?.id) {
           throw new Error('No se encontró el perfil del docente')
         }
 
 
-        const res = await apiService.getStudentByStudentId(estudiante.value)
+        const res = await apiService.getStudentByStudentId(estudianteId.value)
 
         console.log("this is responsefrom studentbystudent: ", res)
 
         studentProfile.value = res
+        estudiante.value = res.user ? { ...res.user, edad: res.edad, current_level: res.current_level, last_updated_date: res.last_updated_date} : res
+        console.log('Fecha recibida:', estudiante.last_updated_date);
 
         // Cargar información detallada del estudiante desde el backend
-        const response = await apiService.cargarHistoriasPorAlumno(estudiante.value)
+        const response = await apiService.cargarHistoriasPorAlumno(estudianteId.value)
 
         const { historias: h, estadisticas: e, progresoTemas: pt } = procesarRecords(response || [])
         historias.value = h
@@ -409,9 +413,9 @@ export default {
 
         // Si backend aún manda análisis adicional, lo usamos
         analisisRendimiento.value = response.analisis || null
-        
+
         console.log('✅ Datos del estudiante cargados correctamente')
-        
+
       } catch (err) {
         console.error('❌ Error cargando datos del estudiante:', err)
         error.value = err.response?.data?.error || 'Error al cargar la información del estudiante'
@@ -489,25 +493,25 @@ export default {
     const recargarDatos = () => {
       cargarDatosEstudiante()
     }
-    
+
     const volverDashboard = () => {
       router.push('/dashboard-docente')
     }
-    
+
     const verDetalleHistoria = (historiaId) => {
       console.log("click verdetalle historia")
       router.push(`/historia/${historiaId}?modo=revision`)
     }
-    
+
     // ============================================================================
     // 🎯 ACCIONES DEL DOCENTE
     // ============================================================================
-    
+
     const exportarReportePDF = async () => {
       try {
         generandoReporte.value = true
         console.log("📄 Generando reporte PDF...")
-        console.log("this is response", studentProfile.value.user.fullname)
+        console.log("this is response", estudiante.value.user.fullname)
 
         const doc = new jsPDF()
 
@@ -521,10 +525,10 @@ export default {
         doc.text("Reporte de Rendimiento", 105, 20, { align: "center" })
 
         doc.setFontSize(12)
-        doc.text(`Estudiante: ${studentProfile.value?.user.fullname}`, 14, 50)
-        doc.text(`Email: ${studentProfile.value?.user.email}`, 14, 58)
-        doc.text(`Edad: ${studentProfile.value?.edad || "No especificada"}`, 14, 66)
-        doc.text(`Nivel Actual: ${studentProfile.value.current_level}`, 14, 74)
+        doc.text(`Estudiante: ${estudiante.value?.user.fullname}`, 14, 50)
+        doc.text(`Email: ${estudiante.value?.user.email}`, 14, 58)
+        doc.text(`Edad: ${estudiante.value?.edad || "No especificada"}`, 14, 66)
+        doc.text(`Nivel Actual: ${estudiante.value.current_level}`, 14, 74)
         doc.text(`Fecha: ${new Date().toLocaleDateString("es-ES")}`, 14, 82)
 
         // 📊 Resumen de estadísticas
@@ -566,7 +570,7 @@ export default {
         })
 
         // Guardar
-        doc.save(`reporte_${studentProfile.value.user.fullname}_${new Date().toISOString().split("T")[0]}.pdf`)
+        doc.save(`reporte_${estudiante.value.user.fullname}_${new Date().toISOString().split("T")[0]}.pdf`)
 
         toastStore.success("Reporte PDF generado exitosamente")
       } catch (error) {
@@ -576,25 +580,25 @@ export default {
         generandoReporte.value = false
       }
     }
-    
+
     const enviarMensajeMotivacion = () => {
       // TODO: Implementar modal para enviar mensaje personalizado
       toastStore.info('Función de mensajería próximamente disponible')
     }
-    
+
     const compararConClase = () => {
-      router.push(`/dashboard-docente?tab=comparacion&estudiante=${estudiante.value}`)
+      router.push(`/dashboard-docente?tab=comparacion&estudiante=${estudianteId.value}`)
     }
-    
+
     const asignarTareaPersonalizada = () => {
       // TODO: Implementar modal para asignar tareas específicas
       toastStore.info('Función de asignación de tareas próximamente disponible')
     }
-    
+
     // ============================================================================
     // 🎨 MÉTODOS DE FORMATO Y UTILIDADES
     // ============================================================================
-    
+
     const getInitials = (nombre) => {
       if (!nombre) return '?'
       const words = nombre.split(' ')
@@ -603,101 +607,13 @@ export default {
       }
       return nombre[0].toUpperCase()
     }
-    
-    const formatDate = (fecha) => {
-      if (!fecha) return 'No disponible'
-      
-      const fechaObj = new Date(fecha)
-      const ahora = new Date()
-      const diferenciaDias = Math.floor((ahora - fechaObj) / (1000 * 60 * 60 * 24))
-      
-      if (diferenciaDias === 0) return 'Hoy'
-      if (diferenciaDias === 1) return 'Ayer'
-      if (diferenciaDias < 7) return `Hace ${diferenciaDias} días`
-      
-      return fechaObj.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'short',
-        year: fechaObj.getFullYear() !== ahora.getFullYear() ? 'numeric' : undefined
-      })
-    }
-    
-    const formatTiempo = (segundos) => {
-      if (segundos < 60) return `${segundos}s`
-      if (segundos < 3600) return `${Math.floor(segundos / 60)}m`
-      return `${Math.floor(segundos / 3600)}h ${Math.floor((segundos % 3600) / 60)}m`
-    }
-    
-    const formatTiempoPromedio = (segundos) => {
-      if (segundos < 60) return `${Math.round(segundos)}s`
-      return `${Math.round(segundos / 60)}m`
-    }
-    
-    const getEmojiTema = (tema) => {
-      const emojis = {
-        'espacio': '🚀',
-        'vaqueros': '🤠',
-        'fantasia': '🧙‍♂️',
-        'piratas': '🏴‍☠️',
-        'aventura': '⛵',
-        'ciencia_ficcion': '👽',
-        'misterio': '🔍',
-        'animales': '🦁',
-        'deportes': '⚽',
-        'cocina': '👨‍🍳',
-        'musica': '🎵',
-        'arte': '🎨'
-      }
-      return emojis[tema] || '📚'
-    }
-    
-    const formatTema = (tema) => {
-      const temas = {
-        'espacio': 'Espacio',
-        'vaqueros': 'Vaqueros',
-        'fantasia': 'Fantasía',
-        'piratas': 'Piratas',
-        'aventura': 'Aventura',
-        'ciencia_ficcion': 'Ciencia Ficción',
-        'misterio': 'Misterio',
-        'animales': 'Animales',
-        'deportes': 'Deportes',
-        'cocina': 'Cocina',
-        'musica': 'Música',
-        'arte': 'Arte'
-      }
-      return temas[tema] || tema.charAt(0).toUpperCase() + tema.slice(1)
-    }
-    
-    const calcularNivel = (puntos) => {
-      const niveles = [
-        { min: 0, max: 99, nombre: 'Explorador', icono: '🌱', color: '#4caf50' },
-        { min: 100, max: 299, nombre: 'Aventurero', icono: '⭐', color: '#2196f3' },
-        { min: 300, max: 599, nombre: 'Narrador', icono: '📚', color: '#ff9800' },
-        { min: 600, max: 999, nombre: 'Maestro Cuentista', icono: '👑', color: '#9c27b0' },
-        { min: 1000, max: Infinity, nombre: 'Leyenda Literaria', icono: '🏆', color: '#f44336' }
-      ]
-      
-      return niveles.find(nivel => puntos >= nivel.min && puntos <= nivel.max) || niveles[0]
-    }
-    
-    const getNivelClase = (nivel) => {
-      const clases = {
-        'Explorador': 'nivel-explorador',
-        'Aventurero': 'nivel-aventurero',
-        'Narrador': 'nivel-narrador',
-        'Maestro Cuentista': 'nivel-maestro',
-        'Leyenda Literaria': 'nivel-leyenda'
-      }
-      return clases[nivel?.nombre] || 'nivel-explorador'
-    }
-    
+
     const getProgresoClass = (porcentaje) => {
       if (porcentaje >= 80) return 'progreso-alto'
       if (porcentaje >= 50) return 'progreso-medio'
       return 'progreso-bajo'
     }
-    
+
     const getIconoRecomendacion = (tipo) => {
       const iconos = {
         'fortaleza': '💪',
@@ -707,13 +623,13 @@ export default {
       }
       return iconos[tipo] || '💡'
     }
-    
+
     // ============================================================================
     // 🎯 LIFECYCLE HOOKS
     // ============================================================================
-    
+
     onMounted(() => {
-      console.log('🏠 Iniciando DetalleEstudiante para ID:', estudiante.value)
+      console.log('🏠 Iniciando DetalleEstudiante para ID:', estudianteId.value)
 
       // Verificar autenticación
       if (!authStore.isAuthenticated || !authStore.isDocente) {
@@ -724,17 +640,17 @@ export default {
 
       cargarDatosEstudiante()
     })
-    
+
     // ============================================================================
     // 👀 WATCHERS
     // ============================================================================
-    
+
     watch(() => route.params.id, (newId) => {
-      if (newId && newId !== estudiante.value) {
+      if (newId && newId !== estudianteId.value) {
         cargarDatosEstudiante()
       }
     })
-    
+
     return {
       // Estados
       estudiante,
@@ -748,33 +664,31 @@ export default {
       generandoReporte,
       filtroTema,
       ordenHistorias,
-      
+
       // Computed
       nivelActual,
       temasDisponibles,
       historiasFiltradas,
-      
+
       // Métodos principales
       recargarDatos,
       volverDashboard,
       verDetalleHistoria,
-      
+
       // Acciones del docente
       exportarReportePDF,
       enviarMensajeMotivacion,
       compararConClase,
       asignarTareaPersonalizada,
-      
+
       // Utilidades
       getInitials,
-      formatDate,
-      formatTiempo,
-      formatTiempoPromedio,
-      getEmojiTema,
-      formatTema,
       getNivelClase,
       getProgresoClass,
-      getIconoRecomendacion
+      getIconoRecomendacion,
+      formatTema,
+      getEmojiTema,
+      formatTiempoPromedio
     }
   }
 }

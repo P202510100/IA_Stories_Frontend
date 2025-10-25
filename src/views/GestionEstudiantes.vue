@@ -374,448 +374,250 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useLoaderStore } from '../stores/loaderStore'
 import { useToastStore } from '../components/ToastNotification.vue'
-import apiService from "@/services/api.js";
+import { parseApiError } from '../utils/errorHandler'
+import apiService from '../services/api'
 
-export default {
-  name: 'GestionEstudiantes',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
-    const toastStore = useToastStore()
+// -------------------------------
+// 📦 Stores y Router
+// -------------------------------
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
+const toastStore = useToastStore()
 
-    const mostrarPopupMatricula = ref(false)
-    const estudianteSeleccionado = ref(null)
+// -------------------------------
+// ⚙️ Reactive Data
+// -------------------------------
+const cargando = ref(false)
+const error = ref('')
+const estudiantes = ref([])
+const busquedaTexto = ref('')
+const filtroEstado = ref('')
+const ordenFiltro = ref('nombre')
+const vistaActual = ref('tarjetas')
+const dropdownActivo = ref(null)
+const mostrarModalInvitar = ref(false)
+const mostrarModalDesvinculacion = ref(false)
+const tabInvitacion = ref('email')
+const enviandoInvitacion = ref(false)
+const desvinculando = ref(false)
+const estudianteADesvincular = ref(null)
+const mostrarPopupMatricula = ref(false)
+const estudianteSeleccionado = ref(null)
 
+const invitacionForm = ref({ email: '', nombre: '', mensaje: '' })
+const user = computed(() => authStore.user)
 
-    const cargando = ref(true)
-    const error = ref('')
-    const estudiantes = ref([])
-    const busquedaTexto = ref('')
-    const filtroEstado = ref('')
-    const ordenFiltro = ref('nombre')
-    const vistaActual = ref('tarjetas')
-    const dropdownActivo = ref(null)
+// -------------------------------
+// 🧠 Computed
+// -------------------------------
+const estudiantesFiltrados = computed(() => {
+  let resultado = [...estudiantes.value]
 
-    const mostrarModalInvitar = ref(false)
-    const mostrarModalDesvinculacion = ref(false)
-    const tabInvitacion = ref('email')
-    const enviandoInvitacion = ref(false)
-    const exportando = ref(false)
-    const desvinculando = ref(false)
-    const estudianteADesvincular = ref(null)
-
-    const codigoClase = ref('ABC123')
-    const codigoCopiado = ref(false)
-
-    const invitacionForm = ref({
-      email: '',
-      nombre: '',
-      mensaje: ''
-    })
-
-    const user = computed(() => authStore.user)
-
-    const estudiantesFiltrados = computed(() => {
-      let resultado = [...estudiantes.value]
-
-      // Filtrar por texto de búsqueda
-      if (busquedaTexto.value) {
-        const texto = busquedaTexto.value.toLowerCase()
-        resultado = resultado.filter(estudiante =>
-          estudiante.nombre.toLowerCase().includes(texto) ||
-          estudiante.email.toLowerCase().includes(texto)
-        )
-      }
-
-      // Filtrar por estado
-      if (filtroEstado.value) {
-        resultado = resultado.filter(estudiante => estudiante.estado === filtroEstado.value)
-      }
-
-      // Ordenar
-      resultado.sort((a, b) => {
-        switch (ordenFiltro.value) {
-          case 'nombre':
-            return a.nombre.localeCompare(b.nombre)
-          case 'puntos':
-            return (b.puntos_totales || 0) - (a.puntos_totales || 0)
-          case 'fecha':
-            return new Date(b.fecha_registro || 0) - new Date(a.fecha_registro || 0)
-          default:
-            return 0
-        }
-      })
-
-      return resultado
-    })
-
-    const toggleMatricula = async (estudiante) => {
-      try {
-        // Indicador visual temporal
-        estudiante.cargandoMatricula = true
-
-        if (estudiante.matriculado) {
-          // 🔻 DESMATRICULAR
-          await apiService.unenrollStudent(
-              user.value.teacher_profile.id,
-              estudiante.id
-          )
-          estudiante.matriculado = false
-          toastStore.info(`${estudiante.nombre} fue desmatriculado ❌`)
-        } else {
-          // ✅ MATRICULAR
-          await apiService.enrollStudentWithTeacher(
-              user.value.teacher_profile.id,
-              estudiante.id
-          )
-          estudiante.matriculado = true
-          toastStore.success(`${estudiante.nombre} fue matriculado 🎉`)
-        }
-      } catch (err) {
-        console.error('❌ Error en matriculación:', err)
-        toastStore.error('Error al actualizar la matrícula del estudiante')
-      } finally {
-        estudiante.cargandoMatricula = false
-      }
-    }
-
-
-    const abrirPopupMatricula = (estudiante) => {
-      if (estudiante.matriculado) return
-      estudianteSeleccionado.value = estudiante
-      mostrarPopupMatricula.value = true
-    }
-
-    const confirmarMatricula = async () => {
-      try {
-        await apiService.enrollStudentWithTeacher(
-            user.value.teacher_profile.id,
-            estudianteSeleccionado.value.id
-        )
-        estudianteSeleccionado.value.matriculado = true
-        toastStore.success(`${estudianteSeleccionado.value.nombre} ha sido matriculado 🎉`)
-        mostrarPopupMatricula.value = false
-      } catch (err) {
-        console.error(err)
-        toastStore.error("Error al matricular al estudiante")
-      }
-    }
-
-    const promedioClase = computed(() => {
-      if (estudiantes.value.length === 0) return 0
-      const totalPuntos = estudiantes.value.reduce((sum, e) => sum + (e.puntos_totales || 0), 0)
-      return Math.round(totalPuntos / estudiantes.value.length)
-    })
-
-    const mejorEstudiante = computed(() => {
-      if (estudiantes.value.length === 0) return null
-      return estudiantes.value.reduce((mejor, actual) => {
-        return (actual.puntos_totales || 0) > (mejor.puntos_totales || 0) ? actual : mejor
-      })
-    })
-
-    const cargarEstudiantes = async () => {
-      cargando.value = true
-      error.value = ''
-      console.log('this is user: ', user.value)
-      try {
-        const data = await apiService.obtenerEstudiantesDocente(user.value.teacher_profile.id)
-        console.log("this is response data obtenerAlumnos: ", data)
-        estudiantes.value = data.map(e => ({
-          id: e.id,
-          nombre: e.fullname || 'Sin nombre',
-          email: e.email || 'Sin email',
-          estado: e.activo,
-          puntos_totales: e.total_points,
-          current_level: e.current_level,
-          last_updated_date: e.last_updated_date,
-          matriculado: e.matriculado || false
-        }))
-      } catch (err) {
-        console.error('Error cargando estudiantes:', err)
-        error.value = 'Error al cargar la lista de estudiantes'
-      } finally {
-        cargando.value = false
-      }
-    }
-
-    const getInitials = (nombre) => {
-      return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
-    }
-
-    const getEstadoClass = (estado) => {
-      const clases = {
-        'activo': 'estado-activo',
-        'inactivo': 'estado-inactivo',
-        'nuevo': 'estado-nuevo'
-      }
-      return clases[estado] || 'estado-activo'
-    }
-
-    const getEstadoTexto = (estado) => {
-      const textos = {
-        'activo': 'Activo',
-        'inactivo': 'Inactivo',
-        'nuevo': 'Nuevo'
-      }
-      return textos[estado] || 'Activo'
-    }
-
-    const formatActividad = (fechaStr) => {
-      if (!fechaStr) return 'Nunca'
-
-      const fecha = new Date(fechaStr)
-      const ahora = new Date()
-      const diffMs = ahora - fecha
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-
-      if (diffDays === 0) {
-        if (diffHours === 0) return 'Hace unos minutos'
-        return `Hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
-      } else if (diffDays === 1) {
-        return 'Ayer'
-      } else if (diffDays < 7) {
-        return `Hace ${diffDays} días`
-      } else {
-        return fecha.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'short'
-        })
-      }
-    }
-
-    const toggleDropdown = (estudianteId) => {
-      dropdownActivo.value = dropdownActivo.value === estudianteId ? null : estudianteId
-    }
-
-    const verDetalleEstudiante = (estudianteId) => {
-      dropdownActivo.value = null
-      router.push(`/estudiante/${estudianteId}`)
-    }
-
-    const enviarMensaje = async (estudiante) => {
-      console.log('this is student: ', estudiante.id)
-      console.log('this is teacher: ', user.value.teacher_profile.id)
-
-      const response = await apiService.enrollStudentWithTeacher(user.value.teacher_profile.id, estudiante.id)
-      dropdownActivo.value = null
-      // TODO: Implementar modal de envío de mensaje
-      console.log('respuesta de enrollar: ', response)
-      toastStore.info(`Enviando mensaje a ${estudiante.nombre}`)
-    }
-
-
-    
-    const confirmarDesvinculacion = (estudiante) => {
-      dropdownActivo.value = null
-      estudianteADesvincular.value = estudiante
-      mostrarModalDesvinculacion.value = true
-    }
-    
-    const desvincularEstudiante = async () => {
-      if (!estudianteADesvincular.value) return
-      
-      desvinculando.value = true
-      console.log('this is student: ', estudiante.id)
-      console.log('this is teacher: ', user.value.teacher_profile.id)
-      try {
-        await apiService.unenrollStudent(
-            user.value.teacher_profile.id,
-            estudianteADesvincular.value.id
-        )
-
-        // actualizar estado local
-        const index = estudiantes.value.findIndex(e => e.id === estudianteADesvincular.value.id)
-        if (index > -1) {
-          estudiantes.value[index].matriculado = false
-        }
-
-        toastStore.success(`${estudianteADesvincular.value.nombre} ha sido desmatriculado`)
-        mostrarModalDesvinculacion.value = false
-        estudianteADesvincular.value = null
-
-      } catch (err) {
-        toastStore.error('Error al desvincular el estudiante')
-      } finally {
-        desvinculando.value = false
-      }
-    }
-    
-    const enviarInvitacion = async () => {
-      if (!invitacionForm.value.email) return
-      
-      enviandoInvitacion.value = true
-      
-      try {
-        // TODO: Llamar API real
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        toastStore.success(`Invitación enviada a ${invitacionForm.value.email}`)
-        mostrarModalInvitar.value = false
-        invitacionForm.value = { email: '', nombre: '', mensaje: '' }
-        
-      } catch (err) {
-        toastStore.error('Error al enviar la invitación')
-      } finally {
-        enviandoInvitacion.value = false
-      }
-    }
-
-    
-
-    const volverAtras = () => {
-      router.push('/dashboard-docente')
-    }
-    
-
-
-  const cargarTodosLosEstudiantes = async () => {
-  try {
-    cargandoTodosEstudiantes.value = true
-    console.log('📋 Cargando todos los estudiantes registrados...')
-    
-    if (!authStore.user?.id || !authStore.profile?.id) {
-      throw new Error('No se encontró el perfil del docente')
-    }
-    
-    // Obtener todos los estudiantes
-    const response = await apiService.obtenerTodosLosEstudiantes()
-    console.log('✅ Estudiantes obtenidos:', response)
-    
-    // Obtener estudiantes ya asignados al docente
-    const estudiantesAsignadosResponse = await apiService.obtenerEstudiantesDocente(authStore.profile.id)
-    console.log('📊 Estudiantes asignados:', estudiantesAsignadosResponse)
-    
-    const idsAsignados = new Set(
-      estudiantesAsignadosResponse.estudiantes?.map(e => e.user_id || e.alumno_id || e.id) || []
+  if (busquedaTexto.value) {
+    const texto = busquedaTexto.value.toLowerCase()
+    resultado = resultado.filter(e =>
+        e.nombre.toLowerCase().includes(texto) || e.email.toLowerCase().includes(texto)
     )
-    
-    // Marcar cuáles están asignados
-    todosLosEstudiantes.value = (response.alumnos || []).map(estudiante => ({
-      ...estudiante,
-      esta_asignado: idsAsignados.has(estudiante.user_id || estudiante.id)
-    }))
-    
-    console.log(`✅ ${todosLosEstudiantes.value.length} estudiantes cargados`)
-    console.log('📋 Estudiantes disponibles:', todosLosEstudiantes.value.filter(e => !e.esta_asignado).length)
-    console.log('✅ Estudiantes asignados:', todosLosEstudiantes.value.filter(e => e.esta_asignado).length)
-    
-  } catch (error) {
-    console.error('❌ Error cargando estudiantes:', error)
-    toastStore.error('Error al cargar la lista de estudiantes: ' + error.message)
-  } finally {
-    cargandoTodosEstudiantes.value = false
   }
-}
 
-const asignarEstudiante = async (estudiante) => {
-  console.log('this is student: ', estudiante.id)
-  console.log('this is teacher: ', user.value.teacher_profile.id)
-}
+  if (filtroEstado.value) {
+    resultado = resultado.filter(e => e.estado === filtroEstado.value)
+  }
 
-const desasignarEstudiante = async (estudiante) => {
+  resultado.sort((a, b) => {
+    switch (ordenFiltro.value) {
+      case 'nombre':
+        return a.nombre.localeCompare(b.nombre)
+      case 'puntos':
+        return (b.puntos_totales || 0) - (a.puntos_totales || 0)
+      case 'fecha':
+        return new Date(b.fecha_registro || 0) - new Date(a.fecha_registro || 0)
+      default:
+        return 0
+    }
+  })
+  return resultado
+})
+
+const promedioClase = computed(() => {
+  if (!estudiantes.value.length) return 0
+  const total = estudiantes.value.reduce((sum, e) => sum + (e.puntos_totales || 0), 0)
+  return Math.round(total / estudiantes.value.length)
+})
+
+const mejorEstudiante = computed(() => {
+  if (!estudiantes.value.length) return null
+  return estudiantes.value.reduce((a, b) =>
+      (b.puntos_totales || 0) > (a.puntos_totales || 0) ? b : a
+  )
+})
+
+// -------------------------------
+// 🚀 Cargar Estudiantes
+// -------------------------------
+const cargarEstudiantes = async () => {
   try {
-    desasignandoEstudiante.value = estudiante.id
-    console.log(`➖ Quitando estudiante ${estudiante.nombre} de la clase...`)
-    
-    await apiService.desvincularEstudiante(authStore.profile.id, estudiante.user_id || estudiante.id)
-    
-    const index = todosLosEstudiantes.value.findIndex(e => e.id === estudiante.id)
-    if (index !== -1) {
-      todosLosEstudiantes.value[index].esta_asignado = false
-    }
-    
-    await cargarEstudiantes()
-    
-    toastStore.success(`➖ ${estudiante.nombre} fue quitado de tu clase`)
-    
-  } catch (error) {
-    console.error('❌ Error desasignando estudiante:', error)
-    toastStore.error(`Error al quitar a ${estudiante.nombre}`)
-  } finally {
-    desasignandoEstudiante.value = null
-  }
-}
-
-const refrescarEstudiantes = () => {
-  cargarTodosLosEstudiantes()
-}
-
-
-    // Cerrar dropdown al hacer click fuera
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.acciones-dropdown')) {
-        dropdownActivo.value = null
-      }
-    }
-    
-    onMounted(() => {
-      cargarEstudiantes()
-      document.addEventListener('click', handleClickOutside)
-      
-      return () => {
-        document.removeEventListener('click', handleClickOutside)
-      }
+    cargando.value = true
+    error.value = ''
+    loader.show({
+      message: 'Cargando estudiantes...',
+      submessage: 'Recuperando datos desde el servidor 👩‍🏫',
+      type: 'dots'
     })
-    
-    return {
-      // Reactive data
-      cargando,
-      error,
-      estudiantes,
-      busquedaTexto,
-      filtroEstado,
-      ordenFiltro,
-      vistaActual,
-      dropdownActivo,
-      mostrarModalInvitar,
-      mostrarModalDesvinculacion,
-      tabInvitacion,
-      enviandoInvitacion,
-      exportando,
-      desvinculando,
-      estudianteADesvincular,
-      codigoClase,
-      codigoCopiado,
-      invitacionForm,
 
-      mostrarPopupMatricula,
-      estudianteSeleccionado,
-      abrirPopupMatricula,
-      confirmarMatricula,
-      // Computed
-      user,
-      estudiantesFiltrados,
-      promedioClase,
-      mejorEstudiante,
-      
-      // Methods
-      getInitials,
-      getEstadoClass,
-      getEstadoTexto,
-      formatActividad,
-      toggleDropdown,
-      verDetalleEstudiante,
-      enviarMensaje,
-      confirmarDesvinculacion,
-      desvincularEstudiante,
-      enviarInvitacion,
-      volverAtras,
-      cargarTodosLosEstudiantes,
-      asignarEstudiante,
-      desasignarEstudiante,
-      refrescarEstudiantes,
-      toggleMatricula
-    }
+    const data = await apiService.obtenerEstudiantesDocente(user.value.teacher_profile.id)
+    estudiantes.value = data.map(e => ({
+      id: e.id,
+      nombre: e.fullname || 'Sin nombre',
+      email: e.email || 'Sin email',
+      estado: e.activo ? 'activo' : 'inactivo',
+      puntos_totales: e.total_points || 0,
+      current_level: e.current_level || 'Principiante',
+      last_updated_date: e.last_updated_date,
+      matriculado: e.matriculado || false,
+      cargandoMatricula: false
+    }))
+  } catch (err) {
+    console.error('❌ Error cargando estudiantes:', err)
+    error.value = parseApiError(err)
+    toastStore.error(error.value)
+  } finally {
+    loader.hide()
+    cargando.value = false
   }
 }
+
+// -------------------------------
+// 🔄 Matricular / Desmatricular
+// -------------------------------
+const toggleMatricula = async (estudiante) => {
+  try {
+    estudiante.cargandoMatricula = true
+    const docenteId = user.value.teacher_profile.id
+
+    if (estudiante.matriculado) {
+      await apiService.unenrollStudent(docenteId, estudiante.id)
+      estudiante.matriculado = false
+      toastStore.info(`${estudiante.nombre} fue desmatriculado ❌`)
+    } else {
+      await apiService.enrollStudentWithTeacher(docenteId, estudiante.id)
+      estudiante.matriculado = true
+      toastStore.success(`${estudiante.nombre} fue matriculado 🎉`)
+    }
+  } catch (err) {
+    console.error('Error en matrícula:', err)
+    toastStore.error(parseApiError(err))
+  } finally {
+    estudiante.cargandoMatricula = false
+  }
+}
+
+// -------------------------------
+// 💌 Invitación de estudiantes
+// -------------------------------
+const enviarInvitacion = async () => {
+  if (!invitacionForm.value.email) return
+  enviandoInvitacion.value = true
+
+  try {
+    loader.show({
+      message: 'Enviando invitación...',
+      submessage: 'Enviando correo electrónico 📧',
+      type: 'heart'
+    })
+
+    // TODO: Reemplazar con endpoint real de invitación
+    await new Promise(res => setTimeout(res, 1500))
+
+    toastStore.success(`Invitación enviada a ${invitacionForm.value.email}`)
+    mostrarModalInvitar.value = false
+    invitacionForm.value = { email: '', nombre: '', mensaje: '' }
+  } catch (err) {
+    toastStore.error(parseApiError(err))
+  } finally {
+    loader.hide()
+    enviandoInvitacion.value = false
+  }
+}
+
+// -------------------------------
+// ⚠️ Desvincular estudiante
+// -------------------------------
+const confirmarDesvinculacion = (estudiante) => {
+  estudianteADesvincular.value = estudiante
+  mostrarModalDesvinculacion.value = true
+}
+
+const desvincularEstudiante = async () => {
+  if (!estudianteADesvincular.value) return
+  desvinculando.value = true
+
+  try {
+    const docenteId = user.value.teacher_profile.id
+    await apiService.unenrollStudent(docenteId, estudianteADesvincular.value.id)
+
+    const i = estudiantes.value.findIndex(e => e.id === estudianteADesvincular.value.id)
+    if (i > -1) estudiantes.value[i].matriculado = false
+
+    toastStore.success(`${estudianteADesvincular.value.nombre} ha sido desvinculado.`)
+    mostrarModalDesvinculacion.value = false
+  } catch (err) {
+    toastStore.error(parseApiError(err))
+  } finally {
+    desvinculando.value = false
+  }
+}
+
+// -------------------------------
+// 🧭 Navegación y auxiliares
+// -------------------------------
+const volverAtras = () => router.push('/dashboard-docente')
+const verDetalleEstudiante = (id) => router.push(`/estudiante/${id}`)
+
+const getInitials = (nombre) =>
+    nombre ? nombre.split(' ').map(n => n[0]).join('').toUpperCase() : '??'
+
+const getEstadoClass = (estado) => ({
+  activo: 'estado-activo',
+  inactivo: 'estado-inactivo',
+  nuevo: 'estado-nuevo'
+}[estado] || 'estado-activo')
+
+const getEstadoTexto = (estado) => ({
+  activo: 'Activo',
+  inactivo: 'Inactivo',
+  nuevo: 'Nuevo'
+}[estado] || 'Activo')
+
+const formatActividad = (fechaStr) => {
+  if (!fechaStr) return 'Nunca'
+  const f = new Date(fechaStr)
+  const diff = (Date.now() - f) / (1000 * 60 * 60)
+  if (diff < 1) return 'Hace unos minutos'
+  if (diff < 24) return `Hace ${Math.floor(diff)} hora(s)`
+  if (diff < 48) return 'Ayer'
+  if (diff < 168) return `Hace ${Math.floor(diff / 24)} día(s)`
+  return f.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+}
+
+// -------------------------------
+// 🔄 Lifecycle
+// -------------------------------
+onMounted(() => {
+  cargarEstudiantes()
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.acciones-dropdown')) dropdownActivo.value = null
+  })
+})
 </script>
+
 
 <style scoped>
 /* --- Matricula / Desmatricula UI --- */

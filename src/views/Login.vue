@@ -8,9 +8,11 @@
       </div>
 
       <!-- Mostrar errores del backend -->
-      <div v-if="authStore.error" class="error-message">
-         {{ authStore.error }}
-      </div>
+      <transition name="fade">
+        <div v-if="authStore.error" class="error-message">
+          ⚠️ {{ authStore.error }}
+        </div>
+      </transition>
 
       <!-- Formulario de login -->
       <form @submit.prevent="handleLogin" class="login-form">
@@ -38,13 +40,12 @@
           />
         </div>
 
-        <button 
-          type="submit" 
-          class="login-btn"
-          :disabled="authStore.loading || !isFormValid"
+        <button
+            type="submit"
+            class="login-btn"
+            :disabled="!isFormValid"
         >
-          <span v-if="authStore.loading">⏳ Iniciando sesión...</span>
-          <span v-else>🚀 Iniciar Sesión</span>
+          🚀 Iniciar Sesión
         </button>
       </form>
 
@@ -63,130 +64,130 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { useLoaderStore } from '../stores/loaderStore'
 
-export default {
-  name: 'Login',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
-    
-    // Estados reactivos
-    const formData = ref({
-      email: '',
-      password: ''
-    })
-    
-    const backendStatus = ref('checking')
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
 
-    // Computed properties
-    const isFormValid = computed(() => {
-      return formData.value.email && 
-             formData.value.password && 
-             formData.value.email.includes('@')
-    })
+// Datos reactivos
+const formData = ref({
+  email: '',
+  password: ''
+})
 
-    
-    const handleLogin = async () => {
-      try {
-        console.log('🔐 Iniciando proceso de login...')
-        
-        // Limpiar errores previos
-        authStore.clearError()
-        
-        
-        const response = await authStore.login({
-          email: formData.value.email,
-          password: formData.value.password
-        })
-        
-        console.log('✅ Login exitoso:', response)
-        
-        // ✅ REDIRIGIR según el tipo de usuario del backend
-        redirectToDashboard()
-        
-      } catch (error) {
-        console.error('❌ Error en login:', error)
-        // El error ya está manejado en el store
-      }
-    }
+// Estado de backend (opcional)
+const backendStatus = ref('checking')
 
-    const redirectToDashboard = () => {
+// Computed
+const isFormValid = computed(() => {
+  return (
+      formData.value.email &&
+      formData.value.password &&
+      formData.value.email.includes('@')
+  )
+})
 
-      console.log('this is authstore: ', authStore.user.fullname)
+// ===========================================================
+// 🧩 Login principal
+// ===========================================================
+const handleLogin = async () => {
+  try {
+    console.log('🔐 Iniciando proceso de login...')
+    authStore.clearError()
 
-      const userType = authStore.user?.tipo
-      
-      if (userType === 'student') {
-        console.log('🎓 Redirigiendo a dashboard de alumno')
-        router.push('/dashboard-alumno')
-      } else if (userType === 'teacher') {
-        console.log('👨‍🏫 Redirigiendo a dashboard de docente')
-        router.push('/dashboard-docente')
-      } else {
-        console.error('❌ Tipo de usuario no reconocido:', userType)
-        authStore.clearError()
-      }
-    }
-
-    
-    const checkExistingSession = () => {
-      if (authStore.restoreSession()) {
-        console.log('✅ Sesión restaurada, redirigiendo...')
-        redirectToDashboard()
-      }
-    }
-
-    // Lifecycle hooks
-    onMounted(() => {
-       console.log('🔄 Componente Login montado')
-
-  //  VERIFICAR PARÁMETROS DE URL ANTES DE VERIFICAR SESIÓN
-  const urlParams = new URLSearchParams(window.location.search)
-  const forceLogin = urlParams.get('force') === 'true'
-  
-  console.log('🔍 Login: URL actual:', window.location.href)
-  console.log('🔍 Login: force parámetro:', forceLogin)
-  
-  if (forceLogin) {
-    console.log('🔒 Login: force=true detectado, limpiando sesión y mostrando formulario')
-    
-    // Limpiar cualquier sesión existente
-    authStore.logout()
-    
-    // Limpiar parámetros de URL para evitar loops infinitos
-    const newUrl = window.location.pathname
-    window.history.replaceState({}, document.title, newUrl)
-    console.log('🧹 Login: URL limpiada a:', newUrl)
-    
-  } else {
-    console.log('🔍 Login: No hay force=true, verificando sesión existente...')
-    checkExistingSession()
-  }
+    // Mostrar loader global
+    loader.show({
+      message: 'Iniciando sesión...',
+      submessage: 'Validando credenciales y preparando tu entorno',
+      type: 'login'
     })
 
-    return {
-      // Data
-      formData,
-      backendStatus,
-      
-      // Stores
-      authStore,
-      
-      // Computed
-      isFormValid,
-      
-      // Methods
-      handleLogin
-    }
+    const response = await authStore.login({
+      email: formData.value.email,
+      password: formData.value.password
+    })
+
+    console.log('✅ Login exitoso:', response)
+    redirectToDashboard()
+  } catch (error) {
+    console.error('❌ Error en login:', error)
+    // El error ya está manejado en el store
+  } finally {
+    loader.hide()
   }
 }
+
+// ===========================================================
+// 🔄 Redirección post-login
+// ===========================================================
+const redirectToDashboard = () => {
+  const userType = authStore.user?.tipo
+
+  if (userType === 'student') {
+    console.log('🎓 Redirigiendo a dashboard de alumno')
+    router.push('/dashboard-alumno')
+  } else if (userType === 'teacher') {
+    console.log('👨‍🏫 Redirigiendo a dashboard de docente')
+    router.push('/dashboard-docente')
+  } else {
+    console.error('❌ Tipo de usuario no reconocido:', userType)
+    authStore.clearError()
+  }
+}
+
+// ===========================================================
+// 🔁 Restaurar sesión existente
+// ===========================================================
+const checkExistingSession = () => {
+  if (authStore.restoreSession()) {
+    console.log('✅ Sesión restaurada, redirigiendo...')
+    redirectToDashboard()
+  }
+}
+
+// ===========================================================
+// 🪄 Lifecycle
+// ===========================================================
+onMounted(() => {
+  console.log('🔄 Componente Login montado')
+
+  const urlParams = new URLSearchParams(window.location.search)
+  const forceLogin = urlParams.get('force') === 'true'
+
+  if (forceLogin) {
+    console.log('🔒 Login forzado: limpiando sesión...')
+    authStore.logout()
+    const newUrl = window.location.pathname
+    window.history.replaceState({}, document.title, newUrl)
+  } else {
+    checkExistingSession()
+  }
+})
 </script>
 
+
 <style scoped>
+.error-message {
+  background: #ffe5e5;
+  color: #a94442;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #f5c6cb;
+  font-weight: 500;
+  text-align: center;
+}
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
 
 .login-container {
   min-height: 100vh;

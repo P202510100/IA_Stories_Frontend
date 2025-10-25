@@ -1,167 +1,214 @@
+// src/services/api.js
 import axios from 'axios'
+import { useLoaderStore } from '../stores/loaderStore'
+import { parseApiError } from '../utils/errorHandler.js'
 
+// -----------------------------------------------------------------------------
+// ⚙️ CONFIGURACIÓN BASE
+// -----------------------------------------------------------------------------
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/v1',
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  timeout: 100000, // Aumentado para generación IA
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    timeout: 100000
 })
 
-// Interceptor para manejar errores
-api.interceptors.response.use(
-  response => response,
-  error => {
-    console.error('API Error:', error.response?.data || error.message)
-    return Promise.reject(error)
-  }
+// -----------------------------------------------------------------------------
+// 🧩 INTERCEPTORES GLOBALES
+// -----------------------------------------------------------------------------
+api.interceptors.request.use(
+    config => {
+        const loader = useLoaderStore()
+
+        // Mostrar loader si no está desactivado manualmente
+        if (!config.meta?.noLoader) {
+            loader.show({
+                message: config.meta?.message || 'Cargando...',
+                submessage: config.meta?.submessage || '',
+                type: config.meta?.type || 'dots'
+            })
+        }
+        return config
+    },
+    error => {
+        // Error antes de enviar la solicitud
+        const loader = useLoaderStore()
+        loader.hide()
+        return Promise.reject(error)
+    }
 )
 
+api.interceptors.response.use(
+    response => {
+        // Ocultar loader al recibir respuesta exitosa
+        const loader = useLoaderStore()
+        if (!response.config.meta?.noLoader) loader.hide()
+
+        // Retornar directamente el payload
+        return response.data
+    },
+    error => {
+        const loader = useLoaderStore()
+        if (!error.config?.meta?.noLoader) loader.hide()
+
+        // Generar mensaje amigable
+        const friendlyMessage = parseApiError(error)
+        console.error('❌ API Error:', friendlyMessage)
+
+        // Propagar error con mensaje personalizado
+        return Promise.reject({ ...error, friendlyMessage })
+    }
+)
+
+// -----------------------------------------------------------------------------
+// 🌐 SERVICIO DE API PRINCIPAL
+// -----------------------------------------------------------------------------
 const apiService = {
-  // ============================================================================
-  //  AUTENTICACIÓN - ENDPOINTS 
-  // ============================================================================
-  
-  async login(credentials) {
-    const params = new URLSearchParams()
-    params.append('username', credentials.email)
-    params.append('password', credentials.password)
-    params.append('grant_type', 'password')
+    // -------------------- 🔐 AUTENTICACIÓN --------------------
+    login(credentials) {
+        const params = new URLSearchParams()
+        params.append('username', credentials.email)
+        params.append('password', credentials.password)
+        params.append('grant_type', 'password')
 
-    const response = await api.post('/auth/login', params, {
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-    })
-    return response.data
-  },
-  async getStudentByStudentId(studentId) {
-      const response = await api.get(`/students/${studentId}`)
+        return api.post('/auth/login', params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            meta: { message: 'Verificando tus credenciales...', type: 'ai' }
+        })
+    },
 
-      return response.data
-  },
+    register(userData) {
+        return api.post('/auth/register', userData, {
+            meta: { message: 'Creando tu cuenta...', type: 'heart' }
+        })
+    },
 
-  async unenrollStudent(teacherId, studentId) {
-      const response = await api.delete(`/enrollments/${teacherId}/${studentId}`)
+    updateUser(userId, userData) {
+        return api.put(`/users/${userId}`, userData, {
+            meta: { message: 'Actualizando perfil...', type: 'dots' }
+        })
+    },
 
-      return response.data
-  },
+    deleteUser(userId) {
+        const token =
+            localStorage.getItem('token') || localStorage.getItem('access_token')
+        if (!token) throw new Error('No se encontró token de autenticación')
 
-  async register(userData) {
-    const response = await api.post('/auth/register', userData)
-    return response.data
-  },
+        return api.delete('/auth/delete-account', {
+            headers: { Authorization: `Bearer ${token}` },
+            meta: { message: 'Eliminando cuenta...', type: 'pulse' }
+        })
+    },
 
-  async updateUser(userId, userData) {
-      console.log(userId, userData)
-    const response = await api.put(`/users/${userId}`, {
-      ...userData
-    })
-    return response.data
-  },
+    verifyEmail(payload) {
+        return api.post('/auth/verify-email', payload, {
+            meta: { message: 'Verificando tu correo electrónico...' }
+        })
+    },
 
-  async deleteUser(userId) {
-      const token = localStorage.getItem('token') || localStorage.getItem('access_token')
-      if (!token) throw new Error('No se encontró token de autenticación')
+    resetPassword(payload) {
+        return api.post('/auth/reset-password', payload, {
+            meta: { message: 'Restableciendo contraseña...' }
+        })
+    },
 
-      const response = await api.delete('/auth/delete-account', {
-          headers: {
-              Authorization: `Bearer ${token}`
-          }
-      })
-      return response.data
-  },
+    changePassword(payload) {
+        return api.post('/auth/change-password', payload, {
+            meta: { message: 'Actualizando contraseña...' }
+        })
+    },
 
-  // ============================================================================
-  //  HISTORIAS - ENDPOINTS 
-  // ============================================================================
+    // -------------------- 👨‍🎓 ESTUDIANTES --------------------
+    getStudentByStudentId(studentId) {
+        return api.get(`/students/${studentId}`, {
+            meta: { message: 'Cargando datos del estudiante...' }
+        })
+    },
 
-  async verifyEmail(payload) {
-      console.log(payload)
-      const response = await api.post('/auth/verify-email', payload)
-      return response.data
-  },
+    actualizarInteresesAlumno(studentId, interesesArray) {
+        return api.put(`/students/${studentId}/interests`, interesesArray, {
+            meta: { message: 'Actualizando intereses...' }
+        })
+    },
 
-  async resetPassword(payload) {
-    const response = await api.post('/auth/reset-password', payload)
-      return response.data
-  },
+    // -------------------- 📚 HISTORIAS / RECORDS --------------------
+    cargarHistoriasPorAlumno(studentId) {
+        return api.get(`/records/student/${studentId}`, {
+            meta: { message: 'Cargando tus historias...', type: 'book' }
+        })
+    },
 
-  async changePassword(payload) {
-    const response = await api.post('/auth/change-password', payload)
-    return response.data
-  },
+    cargarHistoriaPorId(storyId) {
+        return api.get(`/records/${storyId}`, {
+            meta: { message: 'Cargando historia...', type: 'book' }
+        })
+    },
 
-  async actualizarInteresesAlumno(studentId, interesesArray) {
-    const response = await api.put(`/students/${studentId}/interests`, interesesArray)
-      return response.data
-  },
+    generarHistoria(datosHistoria) {
+        return api.post('/stories/generate', datosHistoria, {
+            meta: { message: 'Generando historia con IA...', type: 'ai' }
+        })
+    },
 
-  async cargarHistoriasPorAlumno(studentId) {
-      const response = await api.get(`/records/student/${studentId}`)
+    guardarRespuesta(recordId, payload) {
+        return api.post(`/records/${recordId}/answers`, payload, {
+            meta: { message: 'Guardando respuesta...' }
+        })
+    },
 
-      return response.data;
-  },
+    reiniciarExamen(recordId) {
+        return api.post(`/records/${recordId}/restart`, {}, {
+            meta: { message: 'Reiniciando intento...' }
+        })
+    },
 
-  async cargarHistoriaPorId(storyId) {
-      const response = await api.get(`/records/${storyId}`)
-      return response.data;
-  },
+    actualizarRecord(recordId, payload) {
+        return api.patch(`/records/${recordId}`, payload, {
+            meta: { message: 'Actualizando progreso...' }
+        })
+    },
 
-  async generarHistoria(datosHistoria) {
-    const response = await api.post('/stories/generate', datosHistoria)
-    return response.data
-  },
+    finalizarRecord(payload) {
+        return api.post(`/records/`, payload, {
+            meta: { message: 'Finalizando evaluación...' }
+        })
+    },
 
-  // ============================================================================
-  //  DOCENTE - ENDPOINTS EXACTOS 
-  // ============================================================================
-  
-  async obtenerEstudiantesDocente(teacherId) {
-      const response = await api.get(`/enrollments/teacher/${teacherId}/students`)
-      return response.data
-  },
+    obtenerRanking() {
+        return api.get(`/records/ranking/class`, {
+            meta: { message: 'Cargando ranking de clase...' }
+        })
+    },
 
-  async guardarRespuesta(recordId, payload) {
-      const response = await api.post(`/records/${recordId}/answers`, payload)
+    guardarProgreso(recordId, respuestas) {
+        return api.post(`/records/${recordId}/save-progress`, respuestas, {
+            meta: { noLoader: true }
+        })
+    },
 
-      return response.data
-  },
+    // -------------------- 👨‍🏫 DOCENTE / MATRÍCULA --------------------
+    obtenerEstudiantesDocente(teacherId) {
+        return api.get(`/enrollments/teacher/${teacherId}/students`, {
+            meta: { message: 'Cargando estudiantes...', type: 'dots' }
+        })
+    },
 
-  async reiniciarExamen(recordId) {
-      const response = await api.post(`/records/${recordId}/restart`)
+    unenrollStudent(teacherId, studentId) {
+        return api.delete(`/enrollments/${teacherId}/${studentId}`, {
+            meta: { message: 'Desmatriculando estudiante...' }
+        })
+    },
 
-      return response.data
-  },
-
-
-  async actualizarRecord(recordId, payload) {
-      const response = await api.patch(`/records/${recordId}`, payload)
-
-      return response.data
-  },
-
-  async finalizarRecord(recordId, payload) {
-      const response = await api.post(`/records/`, payload)
-
-      return response.data
-  },
-
-  async obtenerRanking() {
-    const response = await api.get(`/records/ranking/class`);
-    return response.data
-  },
-
-  async guardarProgreso(recordId, respuestas) {
-     return api.post(`/records/${recordId}/save-progress`, respuestas)
-  },
-  async enrollStudentWithTeacher(teacherId, studentId) {
-      return api.post(`/enrollments/`,{
-          teacher_id: teacherId,
-          student_id: studentId
-      })
-  }
+    enrollStudentWithTeacher(teacherId, studentId) {
+        return api.post(
+            `/enrollments/`,
+            { teacher_id: teacherId, student_id: studentId },
+            {
+                meta: { message: 'Matriculando estudiante...', type: 'heart' }
+            }
+        )
+    }
 }
-
 
 export default apiService

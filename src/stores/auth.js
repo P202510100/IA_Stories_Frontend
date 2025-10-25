@@ -112,7 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
       
     } catch (err) {
       console.error('❌ Error en login:', err)
-      error.value = err.response?.data?.error || err.message || 'Error de conexión'
+      error.value = err.friendlyMessage || err.response?.data?.detail || 'Error de conexión'
       user.value = null
       localStorage.removeItem('user')
       throw err
@@ -149,7 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
       
     } catch (err) {
       console.error('❌ Error en registro:', err)
-      error.value = err.response?.data?.error || err.message || 'Error de conexión'
+      error.value = err.friendlyMessage || err.response?.data?.detail || 'Error de conexión'
       user.value = null
       localStorage.removeItem('user')
       throw err
