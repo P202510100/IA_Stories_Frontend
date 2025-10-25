@@ -32,8 +32,10 @@
     "pinia": "^2.1.7",
     "uuid": "^9.0.1",
     "validator": "^13.11.0",
+    "vanilla-tilt": "^1.8.1",
     "vue": "^3.4.15",
     "vue-chartjs": "^5.3.0",
+    "vue-particles-background": "^0.3.1",
     "vue-router": "^4.2.5"
   },
   "devDependencies": {

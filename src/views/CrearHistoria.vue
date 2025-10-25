@@ -103,23 +103,13 @@
       </div>
       <!-- Historia generada -->
       <div v-if="historiaGenerada && !mostrarPreguntas && !juegoCompletado" class="historia-resultado">
-        <div
-            v-if="historiaGenerada.image_b64"
-            class="historia-imagen-efecto"
-            @mousemove="moverImagen"
-            @mouseleave="resetImagen"
-            ref="imagenRef"
-        >
-          <!-- ✨ Partículas de chispas -->
-          <div class="sparkle-container">
-            <span v-for="i in 25" :key="i" class="sparkle"></span>
-          </div>
-
-          <!-- Imagen -->
+        <div v-if="historiaGenerada.image_b64" class="historia-imagen-wrapper" ref="tiltWrap">
+          <!-- Imagen con efecto tilt -->
           <img
               :src="`data:image/png;base64,${historiaGenerada.image_b64}`"
               alt="Imagen generada"
-              class="imagen-con-efecto"
+              class="imagen-tilt"
+              ref="tiltImg"
           />
         </div>
         <div class="historia-header">
@@ -272,7 +262,9 @@
 import {ref, onMounted, computed, watch, nextTick} from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import apiService from "@/services/api.js";
+import apiService from "../services/api.js";
+import VanillaTilt from "vanilla-tilt";
+
 export default {
   name: 'CrearHistoria',
   setup() {
@@ -290,7 +282,8 @@ export default {
 
     const error = ref(null)
 
-
+    const tiltImg = ref(null)
+    const tiltWrap = ref(null)
 
     // Computed properties - Formulario
     const profile = computed(() => authStore.profile)
@@ -655,24 +648,42 @@ export default {
       error.value = null
     }
 
-    // Si el usuario no está autenticado, redirigir
     onMounted(() => {
-      const sparkles = document.querySelectorAll(".sparkle");
-      sparkles.forEach((s) => {
-        s.style.setProperty("--rand-x", Math.random() * 200 - 100);
-        s.style.setProperty("--rand-y", Math.random() * 40 - 20);
-        s.style.animationDelay = `${Math.random() * 4}s`;
-      });
-
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         router.push('/login')
       }
     })
 
+    watch(historiaGenerada, async (nueva, antigua) => {
+      // destruir tilt previo
+      if (antigua?.image_b64 && tiltImg.value?.vanillaTilt) {
+        tiltImg.value.vanillaTilt.destroy()
+      }
+
+      if (!nueva?.image_b64) return
+      await nextTick()
+
+      // inicializar Tilt sobre el <img ref="tiltImg">
+      if (tiltImg.value) {
+        VanillaTilt.init(tiltImg.value, {
+          max: 15,
+          speed: 300,
+          scale: 1.05,
+          glare: true,
+          "max-glare": 0.4,
+          gyroscope: true,
+          reset: true,
+        })
+        console.log("✨ VanillaTilt inicializado")
+      }
+    })
+
+
+
     // ============================================================================
     // 🔧 MÉTODOS AUXILIARES
     // ============================================================================
-    
+
     function getTemaLabel(temaId) {
       const tema = temas.value.find(t => t.id === temaId)
       return tema ? tema.nombre : temaId
@@ -680,64 +691,42 @@ export default {
 
     const imagenRef = ref(null);
 
-    function moverImagen(e) {
-      const card = imagenRef.value;
-      if (!card) return;
 
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-
-      const rotateX = ((y - centerY) / centerY) * 8;  // más suave
-      const rotateY = ((x - centerX) / centerX) * 8;
-
-      card.style.transform = `rotateX(${-rotateX}deg) rotateY(${rotateY}deg) scale(1.03)`;
-    }
-
-    function resetImagen() {
-      const card = imagenRef.value;
-      if (!card) return;
-      card.style.transform = "rotateX(0deg) rotateY(0deg) scale(1)";
-    }
 
     return {
       elementosLista,
       elementosInput,
       agregarElemento,
       eliminarElemento,
-
       // Estados - Formulario
       formData,
       error,
-
       // Estados - Preguntas
       mostrarPreguntas,
       preguntaActual,
       respuestasUsuario,
       puntosTotales,
       juegoCompletado,
-      
+
       // Computed - Formulario
       profile,
       temas,
       historiaGenerada,
       edadesDisponibles,
-      
+
       // Computed - Preguntas
       preguntas,
       preguntaEnCurso,
       totalPreguntas,
       progresoPorcentaje,
-      
+
       // Métodos - Formulario
       seleccionarTema,
       crearHistoria,
       clearError,
       getTemaLabel,
       getParrafos,
-      
+
       // Métodos - Preguntas
       irAPreguntas,
       responderPregunta,
@@ -756,8 +745,8 @@ export default {
       temaLibreActivo,
       formularioCompleto,
       imagenRef,
-      moverImagen,
-      resetImagen,
+      tiltWrap,
+      tiltImg
     }
   }
 }
@@ -765,91 +754,23 @@ export default {
 
 <style scoped>
 
-/* 💡 Efecto hover */
-.historia-imagen-container:hover .imagen-magica {
-  transform: scale(1.03);
-  box-shadow: 0 12px 30px rgba(255, 255, 255, 0.3);
-}
-.historia-imagen-efecto {
+.historia-imagen-wrapper {
   position: relative;
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   margin: 2rem auto;
-  perspective: 1000px;
-  transform-style: preserve-3d;
-  transition: transform 0.2s ease-out;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-/* 🌟 Imagen principal */
-.imagen-con-efecto {
+.imagen-tilt {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
-  border-radius: 16px;
-  z-index: 2;
-  position: relative;
-  transition: transform 0.2s ease, box-shadow 0.3s ease;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-}
-
-/* ✨ Contenedor de chispas */
-.sparkle-container {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
-  z-index: 1;
-  pointer-events: none;
-}
-
-/* ✨ Partículas individuales */
-.sparkle {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  background: radial-gradient(circle, rgba(255,255,255,1), transparent);
-  border-radius: 50%;
-  animation: sparkle-move 5s linear infinite;
-  opacity: 0.8;
-}
-
-/* Genera posiciones y tamaños aleatorios */
-.sparkle:nth-child(odd) {
-  width: 4px;
-  height: 4px;
-  animation-duration: 3.5s;
-}
-.sparkle:nth-child(3n) {
-  width: 8px;
-  height: 8px;
-  background: radial-gradient(circle, #ffd6f6, transparent);
-}
-.sparkle:nth-child(5n) {
-  background: radial-gradient(circle, #a0e9ff, transparent);
-}
-
-/* Movimiento de chispas */
-@keyframes sparkle-move {
-  0% {
-    transform: translateY(0) scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: translateY(-60px) scale(1.3);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-120px) scale(0.8);
-    opacity: 0;
-  }
-}
-/* Distribuye aleatoriamente las chispas */
-.sparkle {
-  top: calc(50% + (var(--rand-y, 0) * 1px));
-  left: calc(50% + (var(--rand-x, 0) * 1px));
-}
-
-/* Hover: da un leve resplandor a la imagen */
-.historia-imagen-efecto:hover .imagen-con-efecto {
-  box-shadow: 0 12px 40px rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 }
 .chips-input {
   width: 100%;
@@ -1522,24 +1443,26 @@ export default {
   .temas-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .historia-info {
     flex-direction: column;
     align-items: center;
   }
-  
+
   .historia-actions {
     display: flex;
     flex-direction: column;
     gap: 15px;
   }
-  
+
   .estadisticas {
     gap: 20px;
   }
-  
+
   .acciones-finales {
     flex-direction: column;
   }
 }
+
+
 </style>
