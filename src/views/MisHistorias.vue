@@ -5,7 +5,7 @@
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
-          <h1>📚 Mis Historias</h1>
+          <h1>Mis Historias</h1>
           <p>Todas las aventuras que has vivido</p>
         </div>
         <div class="header-actions">
@@ -206,389 +206,389 @@
       </div>
 
     </div>
+    <OverlayLoader
+        :visible="loadingExport"
+        message="🧾 Generando reporte detallado..."
+        submessage="Por favor espera unos segundos mientras se crea el PDF"
+        type="book"
+    />
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import api from "@/services/api.js";
-import jsPDF from "jspdf"
-import autoTable from "jspdf-autotable"
+import { useLoaderStore } from '../stores/loaderStore'
+import api from '../services/api.js'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import OverlayLoader from "../components/OverlayLoader.vue";
 
-export default {
-  name: 'MisHistorias',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
 
-    // Estado del componente
-    const loading = ref(true)
-    const loadingExport = ref(false)
-    const error = ref(null)
-    const estadisticas = ref(null)
-    const historias = ref([])
-    // Filtros y paginación
-    const filtros = ref({
-      busqueda: '',
-      tema: '',
-      orden: 'reciente'
+// Estado
+const error = ref(null)
+const estadisticas = ref(null)
+const historias = ref([])
+const loadingExport = ref(false)
+
+// Filtros
+const filtros = ref({
+  busqueda: '',
+  tema: '',
+  orden: 'reciente'
+})
+
+const temasDisponibles = ref([
+  { id: 'aventura', nombre: 'Aventura', icono: '🗺️' },
+  { id: 'fantasia', nombre: 'Fantasía', icono: '🧙‍♂️' },
+  { id: 'espacio', nombre: 'Espacio', icono: '🚀' },
+  { id: 'naturaleza', nombre: 'Naturaleza', icono: '🌿' },
+  { id: 'misterio', nombre: 'Misterio', icono: '🔍' },
+  { id: 'ciencia', nombre: 'Ciencia', icono: '🔬' },
+  { id: 'deportes', nombre: 'Deportes', icono: '⚽' },
+  { id: 'amistad', nombre: 'Amistad', icono: '👫' },
+])
+
+// Paginación
+const paginaActual = ref(1)
+const historiasPorPagina = 9
+
+const profile = computed(() => authStore.profile)
+
+// =====================================================
+// 🧩 Cargar datos (usa loader global)
+// =====================================================
+async function cargarDatos() {
+  error.value = null
+
+  try {
+    if (!profile.value?.id) {
+      throw new Error('No se encontró información del perfil')
+    }
+
+    loader.show({
+      message: 'Cargando tus historias...',
+      submessage: 'Obteniendo datos desde el servidor',
+      type: 'book'
     })
 
-    const temasDisponibles = ref([
-      { id: 'aventura', nombre: 'Aventura', icono: '🗺️' },
-      { id: 'fantasia', nombre: 'Fantasía', icono: '🧙‍♂️' },
-      { id: 'espacio', nombre: 'Espacio', icono: '🚀' },
-      { id: 'naturaleza', nombre: 'Naturaleza', icono: '🌿' },
-      { id: 'misterio', nombre: 'Misterio', icono: '🔍' },
-      { id: 'ciencia', nombre: 'Ciencia', icono: '🔬' },
-      { id: 'deportes', nombre: 'Deportes', icono: '⚽' },
-      { id: 'amistad', nombre: 'Amistad', icono: '👫' },
-    ])
+    const response = await api.cargarHistoriasPorAlumno(profile.value.id)
+    historias.value = response.map(record => {
+      const respondidas =
+          record.status === 'COMPLETED'
+              ? record.total_questions ?? 0
+              : record.correct_answers ?? 0
 
-    const paginaActual = ref(1)
-    const historiasPorPagina = 9
-
-    // Computed properties
-    const profile = computed(() => authStore.profile)
-
-    const historiasFiltradas = computed(() => {
-      let resultado = [...historias.value]
-
-      // Filtrar por búsqueda
-      if (filtros.value.busqueda) {
-        const busqueda = filtros.value.busqueda.toLowerCase()
-        resultado = resultado.filter(h =>
-          h.titulo.toLowerCase().includes(busqueda) ||
-          h.contenido.toLowerCase().includes(busqueda)
-        )
+      return {
+        id: record.story.id,
+        titulo: record.story.title,
+        contenido: record.story.content,
+        tema: record.story.topic,
+        created_at: record.story.created_at,
+        correctas: record.correct_answers ?? 0,
+        total_preguntas: record.total_questions ?? 6,
+        respondidas,
+        puntos_obtenidos: record.points,
+        status: record.status,
+        palabras: record.story.content?.split(' ').length ?? 0,
+        recorId: record.id
       }
-
-      // Filtrar por tema
-      if (filtros.value.tema) {
-        resultado = resultado.filter(h => h.tema === filtros.value.tema)
-      }
-
-      // Ordenar
-      switch (filtros.value.orden) {
-        case 'reciente':
-          resultado.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-          break
-        case 'antiguo':
-          resultado.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-          break
-        case 'titulo':
-          resultado.sort((a, b) => a.titulo.localeCompare(b.titulo))
-          break
-        case 'puntos':
-          resultado.sort((a, b) => (b.puntos_obtenidos || 0) - (a.puntos_obtenidos || 0))
-          break
-      }
-
-      // Paginación
-      const inicio = (paginaActual.value - 1) * historiasPorPagina
-      const fin = inicio + historiasPorPagina
-      return resultado.slice(inicio, fin)
     })
 
-    const totalPaginas = computed(() => {
-      let total = historias.value.length
-
-      // Aplicar filtros para calcular total real
-      if (filtros.value.busqueda || filtros.value.tema) {
-        const filtrados = historias.value.filter(h => {
-          const matchBusqueda = !filtros.value.busqueda ||
-            h.titulo.toLowerCase().includes(filtros.value.busqueda.toLowerCase())
-          const matchTema = !filtros.value.tema || h.tema === filtros.value.tema
-          return matchBusqueda && matchTema
-        })
-        total = filtrados.length
-      }
-
-      return Math.ceil(total / historiasPorPagina)
-    })
-
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-
-    onMounted(async () => {
-      console.log('📚 Iniciando MisHistorias...')
-
-      // Verificar autenticación
-      if (!authStore.isAuthenticated || !authStore.isAlumno) {
-        console.error('❌ Acceso no autorizado')
-        router.push('/login')
-        return
-      }
-
-      await cargarDatos()
-    })
-
-    // Resetear página cuando cambian los filtros
-    watch([() => filtros.value.busqueda, () => filtros.value.tema], () => {
-      paginaActual.value = 1
-    })
-
-    // ============================================================================
-    // 🔄 CARGA DE DATOS - SOLO BACKEND REAL
-    // ============================================================================
-
-    async function cargarDatos() {
-      loading.value = true
-      error.value = null
-
-      try {
-        if (!profile.value?.id) {
-          throw new Error('No se encontró información del perfil')
-        }
-
-        console.log('📊 Cargando historias y estadísticas...')
-
-        // Cargar historias
-
-        const response = await api.cargarHistoriasPorAlumno(profile.value.id);
-
-        console.log('this is response from cargarhistoriasporalumno: ', response)
-
-        historias.value = response.map(record => {
-          let respondidas = 0
-
-          if (record.status === 'COMPLETED') {
-            // Si está finalizado, todas fueron respondidas
-            respondidas = record.total_questions ?? 0
-          } else if (record.status === 'IN_PROGRESS') {
-            // Solo contamos las correctas guardadas (y opcionalmente también incorrectas si las guardas en otro campo)
-            respondidas = record.correct_answers ?? 0
-          }
-          return {
-            id: record.story.id,
-            titulo: record.story.title,
-            contenido: record.story.content,
-            tema: record.story.topic,
-            created_at: record.story.created_at,
-            correctas: record.correct_answers ?? 0,
-            total_preguntas: record.total_questions ?? 6,
-            respondidas, // 👈 calculo aquí
-            puntos_obtenidos: record.points,
-            status: record.status,
-            palabras: record.story.content ? record.story.content.split(' ').length : 0,
-            recorId: record.id
-          }
-        })
-
-        console.log('this is response from historiasgeneradas: ', historias)
-
-        // Cargar temas disponibles
-
-        // Cargar estadísticas
-        await cargarEstadisticas()
-
-        console.log(`✅ ${historias.value.length} historias cargadas`)
-
-      } catch (err) {
-        console.error('❌ Error cargando datos:', err)
-        error.value = err.message || 'Error cargando tus historias'
-      } finally {
-        loading.value = false
-      }
-    }
-
-    async function cargarEstadisticas() {
-      try {
-        const totalHistorias = historias.value.length
-        const puntosTotales = historias.value.reduce((sum, h) => sum + (h.puntos_obtenidos || 0), 0)
-        const totalPreguntas = historias.value.reduce((sum, h) => sum + (h.correctas || 0), 0)
-        const totalCorrectas = historias.value.reduce((sum, h) => sum + (h.total_preguntas || 0), 0)
-
-
-        console.log('this is total historias: ', totalHistorias)
-        console.log('this is puntos totales: ', puntosTotales)
-        console.log('this is total preguntas: ', totalPreguntas)
-        console.log('this is total correctas: ', totalCorrectas)
-
-        estadisticas.value = {
-          total_historias: totalHistorias,
-          puntos_totales: puntosTotales,
-          promedio_respuestas: totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0,
-          nivel_actual: { nombre: 'Principiante' } // luego puedes calcular niveles
-        }
-      } catch (err) {
-        console.error('❌ Error cargando estadísticas:', err)
-        estadisticas.value = {
-          total_historias: historias.value.length,
-          puntos_totales: 0,
-          promedio_respuestas: 0,
-          nivel_actual: { nombre: 'Principiante' }
-        }
-      }
-    }
-
-    async function recargarHistorias() {
-      await cargarDatos()
-    }
-
-    // ============================================================================
-    // 📄 EXPORTACIÓN - SOLO BACKEND REAL
-    // ============================================================================
-
-    async function exportarHistorial() {
-      loadingExport.value = true
-      try {
-        const doc = new jsPDF()
-
-        doc.setFontSize(18)
-        doc.text("Historial de Historias", 14, 20)
-
-        const rows = historias.value.map((h, i) => [
-          i + 1,
-          h.titulo,
-          getTemaLabel(h.tema),
-          formatDate(h.created_at),
-          `${h.respondidas}/${h.total_preguntas}`,
-          h.puntos_obtenidos ?? 0,
-          `${getProgressPercent(h)}%`
-        ])
-
-        autoTable(doc, {
-          head: [["#", "Título", "Tema", "Fecha", "Preguntas", "Puntos", "Progreso"]],
-          body: rows,
-          startY: 30,
-        })
-
-        doc.save("mis_historias.pdf")
-
-      } catch (err) {
-        console.error("❌ Error exportando PDF:", err)
-        error.value = "Error exportando el historial"
-      } finally {
-        loadingExport.value = false
-      }
-    }
-
-    // ============================================================================
-    // 🧭 NAVEGACIÓN Y ACCIONES
-    // ============================================================================
-
-    function irACrearHistoria() {
-      router.push('/crear-historia')
-    }
-
-    function verHistoria(recordId) {
-      router.push(`/historia/${recordId}`)
-    }
-
-    function cambiarPagina(nuevaPagina) {
-      if (nuevaPagina >= 1 && nuevaPagina <= totalPaginas.value) {
-        paginaActual.value = nuevaPagina
-      }
-    }
-
-    function compartirHistoria(historia) {
-      // Funcionalidad básica de compartir (puede expandirse)
-      if (navigator.share) {
-        navigator.share({
-          title: historia.titulo,
-          text: `Mira esta historia que creé: ${historia.titulo}`,
-          url: window.location.origin + `/historia/${historia.id}`
-        })
-      } else {
-        // Fallback: copiar al portapapeles
-        const url = window.location.origin + `/historia/${historia.id}`
-        navigator.clipboard.writeText(url).then(() => {
-          alert('Enlace copiado al portapapeles')
-        })
-      }
-    }
-
-    // ============================================================================
-    // 🔧 MÉTODOS AUXILIARES
-    // ============================================================================
-
-    function getEmojiTema(tema) {
-      if (!tema) return '📚'
-      const key = tema.toString().toLowerCase()
-      const found = temasDisponibles.value.find(t => t.id.toLowerCase() === key)
-      return found ? found.icono : '📚'
-    }
-
-    function getTemaLabel(tema) {
-      if (!tema) return 'Sin tema'
-      const key = tema.toString().toLowerCase()
-      const found = temasDisponibles.value.find(t => t.id.toLowerCase() === key)
-      return found ? found.nombre : tema
-    }
-
-    function getResumen(contenido) {
-      if (!contenido) return 'Sin resumen disponible'
-
-      const palabras = contenido.split(' ')
-      if (palabras.length <= 25) return contenido
-
-      return palabras.slice(0, 25).join(' ') + '...'
-    }
-
-    function formatDate(dateString) {
-      if (!dateString) return ''
-      const date = new Date(dateString)
-      if (isNaN(date.getTime())) return ''
-
-      return date.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      })
-    }
-    function getProgressPercent(historia) {
-      const done = Number(historia.respondidas ?? 0)
-      const total = Number(historia.total_preguntas ?? 0)
-      if (!total) return 0
-      return Math.round((done / total) * 100)
-    }
-
-    function getProgressWidth(historia) {
-      return `${getProgressPercent(historia)}%`
-    }
-
-    function clearError() {
-      error.value = null
-    }
-
-
-    return {
-      // Estado
-      loading,
-      loadingExport,
-      error,
-      estadisticas,
-      temasDisponibles,
-      filtros,
-      paginaActual,
-      getProgressWidth,
-      getProgressPercent,
-      // Computed
-      profile,
-      historiasFiltradas,
-      totalPaginas,
-
-      // Métodos
-      recargarHistorias,
-      exportarHistorial,
-      irACrearHistoria,
-      verHistoria,
-      cambiarPagina,
-      compartirHistoria,
-      getEmojiTema,
-      getTemaLabel,
-      getResumen,
-      formatDate
-    }
+    await cargarEstadisticas()
+  } catch (err) {
+    console.error('❌ Error cargando datos:', err)
+    error.value = err.message || 'Error cargando tus historias'
+  } finally {
+    loader.hide()
   }
 }
+
+async function cargarEstadisticas() {
+  try {
+    const totalHistorias = historias.value.length
+    const puntosTotales = historias.value.reduce((sum, h) => sum + (h.puntos_obtenidos || 0), 0)
+    const totalPreguntas = historias.value.reduce((sum, h) => sum + (h.correctas || 0), 0)
+    const totalCorrectas = historias.value.reduce((sum, h) => sum + (h.total_preguntas || 0), 0)
+
+    estadisticas.value = {
+      total_historias: totalHistorias,
+      puntos_totales: puntosTotales,
+      promedio_respuestas:
+          totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0,
+      nivel_actual: { nombre: 'Principiante' }
+    }
+  } catch (err) {
+    console.error('❌ Error cargando estadísticas:', err)
+  }
+}
+
+async function recargarHistorias() {
+  await cargarDatos()
+}
+
+// =====================================================
+// 📄 Exportar PDF (usa loader local, no global)
+// =====================================================
+async function exportarHistorial() {
+  loadingExport.value = true;
+  try {
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const MARGIN_X = 15;
+    const RIGHT = 195;
+    const WRAP_W = 175;
+    let y = 20;
+
+    // Utilidades ASCII-safe
+    const idxToLetter = (idx) => String.fromCharCode(65 + Number(idx)); // 0->A, 1->B, ...
+    const normalizeIndex = (ans) => {
+      if (ans === null || ans === undefined) return null;
+      if (typeof ans === "number") return ans;
+      const s = String(ans).trim();
+      if (/^\d+$/.test(s)) return parseInt(s, 10);            // "1" -> 1
+      if (/^[a-z]$/i.test(s)) return s.toLowerCase().charCodeAt(0) - 97; // "b" -> 1
+      return null;
+    };
+    const stripLeadingLetter = (txt) =>
+        String(txt).replace(/^\s*[A-Za-z]\)\s*/, ""); // quita "A) ", "b) ", etc.
+
+    const drawWrap = (text, x, y0, width) => {
+      const lines = doc.splitTextToSize(text, width);
+      lines.forEach((ln) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text(ln, x, y);
+        y += 5;
+      });
+      return y;
+    };
+    const hr = () => { doc.setDrawColor(200); doc.line(MARGIN_X, y, RIGHT, y); y += 8; };
+    const checkPage = () => { if (y > 270) { doc.addPage(); y = 20; } };
+
+    // Header
+    const alumno = profile.value || {};
+    doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+    doc.text("Reporte Detallado de Historias", MARGIN_X, y); y += 10;
+
+    doc.setFont("helvetica", "normal"); doc.setFontSize(12);
+    y = drawWrap(`Alumno: ${alumno.fullname || "-"}`, MARGIN_X, y, WRAP_W);
+    y = drawWrap(`Email: ${alumno.email || "-"}`, MARGIN_X, y, WRAP_W);
+    y = drawWrap(`Docente: ${alumno.teacher_name || "No asignado"}`, MARGIN_X, y, WRAP_W);
+    y = drawWrap(`Matriculado: ${alumno.matriculado ? "Sí" : "No"}`, MARGIN_X, y, WRAP_W);
+    y = drawWrap(`Generado: ${new Date().toLocaleString("es-ES")}`, MARGIN_X, y, WRAP_W);
+    hr();
+
+    // Historias
+    for (const [ix, h] of historias.value.entries()) {
+      checkPage();
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+      y = drawWrap(`${ix + 1}. ${h.titulo}`, MARGIN_X, y, WRAP_W);
+
+      doc.setFont("helvetica", "italic"); doc.setFontSize(11);
+      y = drawWrap(`Tema: ${getTemaLabel(h.tema)} | Fecha: ${formatDate(h.created_at)}`, MARGIN_X, y, WRAP_W);
+
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      y = drawWrap(`Puntos: ${h.puntos_obtenidos ?? 0} | Estado: ${h.status}`, MARGIN_X, y, WRAP_W);
+      y += 2;
+
+      // Texto de la historia
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      y = drawWrap(h.contenido || "Sin contenido", MARGIN_X, y, WRAP_W);
+      hr();
+
+      // Preguntas
+      try {
+        const det = await api.cargarHistoriaPorId(h.recorId);
+        const preguntas = det?.story?.question_answer ?? [];
+        const respuestas = det?.answers ?? []; // [{question_index, response}, ...]
+
+        if (preguntas.length) {
+          doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+          y = drawWrap("Preguntas y respuestas", MARGIN_X, y, WRAP_W);
+
+          preguntas.forEach((q, i) => {
+            checkPage();
+
+            // Título de pregunta
+            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+            y = drawWrap(`${i + 1}. ${q.question}`, MARGIN_X, y, WRAP_W);
+
+            // Normalizar CORRECTA (puede venir 1 o "a")
+            const correctIdx = normalizeIndex(q.answer);
+            const correctLetter = correctIdx !== null ? idxToLetter(correctIdx) : "-";
+
+            // Respuesta marcada del alumno (puede ser índice, letra o texto)
+            const rawAlumno = respuestas.find(a => a.question_index === i)?.response ?? null;
+
+            // Determinar índice marcado si se puede
+            let markedIdx = null;
+            if (rawAlumno !== null) {
+              // Si coincide por índice/letra
+              const maybeIdx = normalizeIndex(rawAlumno);
+              if (maybeIdx !== null) markedIdx = maybeIdx;
+              else {
+                // Si vino como texto completo, buscar match con opción
+                const t = String(rawAlumno).trim().toLowerCase();
+                const found = (q.options || []).findIndex(op => String(op).trim().toLowerCase() === t);
+                markedIdx = found >= 0 ? found : null;
+              }
+            }
+            const markedLetter = markedIdx !== null ? idxToLetter(markedIdx) : "-";
+
+            // Opciones: imprimimos A) ... ; marcamos con sufijos ASCII [MARCADA], [CORRECTA]
+            doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+            (q.options || []).forEach((op, idx) => {
+              checkPage();
+              const cleanText = stripLeadingLetter(op);
+              const letter = idxToLetter(idx);
+              const isMarked = markedIdx === idx;
+              const isCorrect = correctIdx === idx;
+
+              // 100% ASCII para evitar símbolos raros
+              let suffix = "";
+              if (isCorrect && isMarked) suffix = "  [CORRECTA][MARCADA]";
+              else if (isCorrect)       suffix = "  [CORRECTA]";
+              else if (isMarked)        suffix = "  [MARCADA]";
+
+              y = drawWrap(`${letter}) ${cleanText}${suffix}`, MARGIN_X + 6, y, WRAP_W - 6);
+            });
+
+            // Líneas “Respuesta marcada” y “Correcta” (sin duplicar la alternativa)
+            const correctText = correctIdx !== null && q.options?.[correctIdx]
+                ? stripLeadingLetter(q.options[correctIdx])
+                : "-";
+
+            doc.setFont("helvetica", "italic"); doc.setFontSize(9);
+            y = drawWrap(`-> Respuesta marcada: ${markedLetter}`, MARGIN_X + 6, y, WRAP_W - 6);
+            y = drawWrap(`-> Correcta: (${correctLetter}) ${correctText}`, MARGIN_X + 6, y, WRAP_W - 6);
+            y += 4;
+          });
+        } else {
+          doc.setFont("helvetica", "italic"); doc.setFontSize(10);
+          y = drawWrap("Esta historia no tiene preguntas registradas.", MARGIN_X, y, WRAP_W);
+        }
+      } catch (e) {
+        doc.setFont("helvetica", "italic"); doc.setFontSize(10);
+        y = drawWrap("No se pudieron obtener las preguntas de esta historia.", MARGIN_X, y, WRAP_W);
+        console.error("Detalle historia error:", e);
+      }
+
+      hr();
+    }
+
+    // Footer
+    doc.setFont("helvetica", "italic"); doc.setFontSize(10);
+    doc.text("Generado por IAStories", MARGIN_X, 285);
+
+    const filename = `reporte_detallado_${(alumno.fullname || "alumno").replace(/\s+/g, "_")}.pdf`;
+    doc.save(filename);
+  } catch (err) {
+    console.error("Export PDF error:", err);
+    error.value = "Error al exportar el PDF.";
+  } finally {
+    loadingExport.value = false;
+  }
+}
+
+// =====================================================
+// 🧭 Navegación
+// =====================================================
+const irACrearHistoria = () => router.push('/crear-historia')
+const verHistoria = id => router.push(`/historia/${id}`)
+
+// =====================================================
+// 🧮 Filtros y helpers
+// =====================================================
+const historiasFiltradas = computed(() => {
+  let resultado = [...historias.value]
+
+  if (filtros.value.busqueda) {
+    const busqueda = filtros.value.busqueda.toLowerCase()
+    resultado = resultado.filter(h =>
+        h.titulo.toLowerCase().includes(busqueda) || h.contenido.toLowerCase().includes(busqueda)
+    )
+  }
+
+  if (filtros.value.tema) {
+    resultado = resultado.filter(h => h.tema === filtros.value.tema)
+  }
+
+  switch (filtros.value.orden) {
+    case 'reciente':
+      resultado.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      break
+    case 'antiguo':
+      resultado.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      break
+    case 'titulo':
+      resultado.sort((a, b) => a.titulo.localeCompare(b.titulo))
+      break
+    case 'puntos':
+      resultado.sort((a, b) => (b.puntos_obtenidos || 0) - (a.puntos_obtenidos || 0))
+      break
+  }
+
+  const inicio = (paginaActual.value - 1) * historiasPorPagina
+  const fin = inicio + historiasPorPagina
+  return resultado.slice(inicio, fin)
+})
+
+const totalPaginas = computed(() =>
+    Math.ceil(historias.value.length / historiasPorPagina)
+)
+
+// Helpers visuales
+const getEmojiTema = tema => temasDisponibles.value.find(t => t.id === tema)?.icono || '📚'
+const getTemaLabel = tema => temasDisponibles.value.find(t => t.id === tema)?.nombre || tema
+const getResumen = c => (c ? c.split(' ').slice(0, 25).join(' ') + '...' : 'Sin resumen')
+const formatDate = d => new Date(d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+const getProgressPercent = h =>
+    h.total_preguntas ? Math.round((h.respondidas / h.total_preguntas) * 100) : 0
+const getProgressWidth = h => `${getProgressPercent(h)}%`
+
+// =====================================================
+// 🔁 Lifecycle
+// =====================================================
+onMounted(async () => {
+  if (!authStore.isAuthenticated || !authStore.isAlumno) {
+    router.push('/login')
+    return
+  }
+  await cargarDatos()
+})
 </script>
 
 <style scoped>
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,0.85);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+.loading-spinner {
+  border: 4px solid #ddd;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .completado {
   background-color: #4caf50;
   color: white;

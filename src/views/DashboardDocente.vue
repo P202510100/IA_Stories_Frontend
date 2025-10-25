@@ -93,10 +93,10 @@
                     ⭐ {{ estudiante.total_points || 0 }} puntos
                   </span>
                 </div>
-
                 <div class="estudiante-nivel">
-                  <span class="nivel-badge" :class="getNivelClase(estudiante.current_level)">
-                    {{ estudiante.current_level || 'Principiante' }}
+                  <span class="nivel-badge" :class="getNivelInfo(estudiante.current_level).color">
+                    {{ getNivelInfo(estudiante.current_level).emoji }}
+                    {{ getNivelInfo(estudiante.current_level).nombre }}
                   </span>
                 </div>
               </div>
@@ -216,280 +216,332 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useLoaderStore } from '../stores/loaderStore'
+import { parseApiError } from '../utils/errorHandler'
 import apiService from '../services/api'
 
-export default {
-  name: 'DashboardDocente',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
 
-    const estadisticas = ref(null)
-    const estudiantes = ref([])
-    const rankingEstudiantes = ref([])
-    const actividadReciente = ref([])
-    const loading = ref(true)
-    const error = ref(null)
-    const tipoRanking = ref('puntos')
+const estadisticas = ref(null)
+const estudiantes = ref([])
+const rankingEstudiantes = ref([])
+const actividadReciente = ref([])
+const loading = ref(false)
+const error = ref(null)
+const tipoRanking = ref('puntos')
 
-    const user = computed(() => authStore.user)
-    const profile = computed(() => authStore.profile)
+const user = computed(() => authStore.user)
+const profile = computed(() => authStore.profile)
 
-    const cargarDatos = async () => {
-      try {
-        loading.value = true
-        error.value = null
+// ============================================================================
+// 🚀 CARGA PRINCIPAL
+// ============================================================================
+const cargarDatos = async () => {
+  error.value = null
+  loading.value = true
 
-        if (!profile.value?.id) {
-          throw new Error('No se encontró el perfil del docente')
-        }
-
-        const docenteId = profile.value.id
-        const resp = await apiService.obtenerEstudiantesDocente(docenteId)
-        console.log("📚 Respuesta del endpoint:", resp)
-
-        // Puede venir como array plano o como {estudiantes: [...]}
-        let raw = Array.isArray(resp) ? resp : (resp?.estudiantes ?? [])
-
-        // Quedarnos SOLO con matriculados (robusto si viene boolean, número o string)
-        const esMatriculado = (v) =>
-            v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true')
-
-        raw = raw.filter(e => esMatriculado(e.matriculado))
-
-        // 2) Normalizar estudiantes
-        estudiantes.value = raw.map(normalizarEstudiante)
-
-        console.log('✅ Estudiantes matriculados:', estudiantes.value.length)
-        console.log('this is stunde.value: ',estudiantes.value)
-        // 3) Estadísticas generales
-        estadisticas.value = calcularEstadisticas(estudiantes.value)
-
-        // 4) Ranking (top 3)
-        rankingEstudiantes.value = calcularRanking(estudiantes.value, tipoRanking.value)
-
-        // 5) Actividad reciente (3 últimas historias creadas)
-        actividadReciente.value = construirActividadReciente(estudiantes.value)
-
-      } catch (err) {
-        console.error('❌ Error cargando datos del dashboard:', err)
-        error.value = `Error al cargar los datos: ${err.message}`
-        estudiantes.value = []
-        estadisticas.value = { total_estudiantes: 0, total_historias: 0, total_actividades: 0, promedio_puntos: 0 }
-        rankingEstudiantes.value = []
-        actividadReciente.value = []
-      } finally {
-        loading.value = false
-      }
-    }
-
-    function normalizarEstudiante(s) {
-      const historiasArray = Array.isArray(s.historias) ? s.historias : []
-      const historiasNorm = historiasArray.map(h => ({
-        id: h.id || h.story_id,
-        title: h.title || h.story?.title || 'Sin título',
-        created_at: h.created_at || h.story?.created_at || h.fecha_creacion,
-        points: h.points ?? h.puntos ?? 0
-      }))
-
-      return {
-        id: s.id || s.user_id || s.alumno_id,
-        fullname: s.fullname || [s.nombre, s.apellido].filter(Boolean).join(' ') || 'Sin nombre',
-        email: s.email || '-',
-        current_level: s.current_level || s.nivel || 'Principiante',
-
-        // Métricas:
-        total_points: s.total_points ?? s.puntos_totales ?? 0,
-        total_historias: s.total_historias ?? s.story_count ?? historiasNorm.length,
-        total_actividades: s.total_actividades ?? s.actividades_completadas ?? s.activities_count ?? 0,
-
-        // Historias:
-        historias: historiasNorm,
-
-        // 🔖 Flag que viene del backend:
-        matriculado: s.matriculado === true || s.matriculado === 1 || s.matriculado === '1' ||
-            (typeof s.matriculado === 'string' && s.matriculado.toLowerCase() === 'true')
-      }
-    }
-
-    function calcularEstadisticas(lista) {
-      const total_estudiantes = lista.length
-      const total_historias = lista.reduce((acc, e) => acc + (e.total_historias || 0), 0)
-      const total_actividades = lista.reduce((acc, e) => acc + (e.total_actividades || 0), 0)
-      const suma_puntos = lista.reduce((acc, e) => acc + (e.total_points || 0), 0)
-      const promedio_puntos = total_estudiantes > 0 ? Math.round(suma_puntos / total_estudiantes) : 0
-
-      return {
-        total_estudiantes,
-        total_historias,
-        total_actividades,
-        promedio_puntos
-      }
-    }
-
-    function calcularRanking(lista, tipo) {
-      const getMetric = (e) => {
-        switch (tipo) {
-          case 'historias':   return e.total_historias || 0
-          case 'actividades': return e.total_actividades || 0
-          case 'puntos':
-          default:            return e.total_points || 0
-        }
-      }
-
-      return lista
-          .slice()
-          .sort((a, b) => getMetric(b) - getMetric(a))
-          .slice(0, 3)
-    }
-
-    function construirActividadReciente(lista) {
-      // Sin usar flatMap: aplanamos con reduce/forEach
-      const items = []
-      lista.forEach(est => {
-        (est.historias || []).forEach(hist => {
-          items.push({
-            id: `${est.id}-${hist.id}`,
-            estudiante_nombre: est.fullname,
-            tipo: 'historia_creada',
-            descripcion: `Creó la historia "${hist.title}"`,
-            puntos: hist.points || 0,
-            fecha: hist.created_at
-          })
-        })
-      })
-
-      return items
-          .filter(i => i.fecha) // solo con fecha válida
-          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-          .slice(0, 3)
-    }
-
-    const recargarEstudiantes = () => {
-      cargarDatos()
-    }
-
-    const verDetalleEstudiante = (estudianteId) => {
-      console.log(`👤 Navegando a detalle de estudiante ${estudianteId}`)
-      router.push(`/estudiante/${estudianteId}`)
-    }
-
-    const getInitials = (nombre) => {
-      if (!nombre) return '??'
-      return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
-    }
-
-    const getNivelClase = (nivel) => {
-      const clases = {
-        'Principiante': 'nivel-principiante',
-        'Explorador': 'nivel-explorador',
-        'Aventurero': 'nivel-aventurero',
-        'Maestro': 'nivel-maestro'
-      }
-      return clases[nivel] || 'nivel-principiante'
-    }
-
-    const getRankingClass = (index) => {
-      if (index === 0) return 'ranking-first'
-      if (index === 1) return 'ranking-second'
-      if (index === 2) return 'ranking-third'
-      return ''
-    }
-
-    const getRankingMedal = (index) => {
-      const medals = ['🥇', '🥈', '🥉', '🏅', '🎖️']
-      return medals[index] || '⭐'
-    }
-
-    const getRankingValue = (estudiante) => {
-      switch (tipoRanking.value) {
-        case 'historias':   return `${estudiante.total_historias || 0} historias`
-        case 'actividades': return `${estudiante.total_actividades || 0} actividades`
-        case 'puntos':
-        default:            return `${estudiante.total_points || 0} puntos`
-      }
-    }
-
-    const getRankingProgress = (estudiante, index) => {
-      const metric = (e) => {
-        switch (tipoRanking.value) {
-          case 'historias':   return e.total_historias || 0
-          case 'actividades': return e.total_actividades || 0
-          case 'puntos':
-          default:            return e.total_points || 0
-        }
-      }
-
-      if (index === 0) return 100
-      const maxValue = rankingEstudiantes.value.length ? metric(rankingEstudiantes.value[0]) : 1
-      const currentValue = metric(estudiante)
-      if (maxValue <= 0) return 10
-      return Math.max(10, Math.round((currentValue / maxValue) * 100))
-    }
-
-    const getActividadIcon = (tipo) => {
-      const iconos = {
-        'historia_completada': '📖',
-        'actividad_completada': '🎯',
-        'historia_creada': '✨',
-        'pregunta_respondida': '❓',
-        'actividad_reciente': '📈'
-      }
-      return iconos[tipo] || '📝'
-    }
-
-    const formatTimeAgo = (fechaStr) => {
-      if (!fechaStr) return ''
-      
-      const fecha = new Date(fechaStr)
-      const ahora = new Date()
-      const diffMs = ahora - fecha
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-      const diffDays = Math.floor(diffHours / 24)
-
-      if (diffDays > 0) {
-        return `hace ${diffDays} día${diffDays > 1 ? 's' : ''}`
-      } else if (diffHours > 0) {
-        return `hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
-      } else {
-        return 'hace unos momentos'
-      }
-    }
-
-    onMounted(() => {
-      cargarDatos()
+  try {
+    loader.show({
+      message: 'Cargando información del docente...',
+      submessage: 'Obteniendo estudiantes y estadísticas 📊',
+      type: 'dots'
     })
 
-    return {
-      user,
-      profile,
-      estadisticas,
-      estudiantes,
-      rankingEstudiantes,
-      actividadReciente,
-      loading,
-      error,
-      tipoRanking,
-      recargarEstudiantes,
-      verDetalleEstudiante,
-      getInitials,
-      getNivelClase,
-      getRankingClass,
-      getRankingMedal,
-      getRankingValue,
-      getRankingProgress,
-      getActividadIcon,
-      formatTimeAgo
+    if (!profile.value?.id) {
+      throw new Error('No se encontró el perfil del docente.')
     }
+
+    const docenteId = profile.value.id
+    const resp = await apiService.obtenerEstudiantesDocente(docenteId)
+    console.log("📚 Respuesta del endpoint:", resp)
+
+    // Asegurar estructura uniforme
+    let raw = Array.isArray(resp) ? resp : (resp?.estudiantes ?? [])
+
+    // Filtrar matriculados
+    const esMatriculado = (v) =>
+        v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true')
+    raw = raw.filter(e => esMatriculado(e.matriculado))
+
+    // Normalizar estudiantes
+    estudiantes.value = raw.map(normalizarEstudiante)
+    estadisticas.value = calcularEstadisticas(estudiantes.value)
+    rankingEstudiantes.value = calcularRanking(estudiantes.value, tipoRanking.value)
+    actividadReciente.value = construirActividadReciente(estudiantes.value)
+
+  } catch (err) {
+    console.error('❌ Error cargando datos del dashboard:', err)
+    error.value = parseApiError(err)
+    estudiantes.value = []
+    estadisticas.value = { total_estudiantes: 0, total_historias: 0, total_actividades: 0, promedio_puntos: 0 }
+    rankingEstudiantes.value = []
+    actividadReciente.value = []
+  } finally {
+    loader.hide()
+    loading.value = false
   }
 }
+const niveles = {
+  1: { nombre: 'Principiante', color: 'nivel-principiante', emoji: '🌱' },
+  2: { nombre: 'Explorador', color: 'nivel-explorador', emoji: '🧭' },
+  3: { nombre: 'Aventurero', color: 'nivel-aventurero', emoji: '🏔️' },
+  4: { nombre: 'Maestro', color: 'nivel-maestro', emoji: '🧙‍♂️' },
+};
+
+const getNivelInfo = (nivel) => {
+  const key = parseInt(nivel) || 1;
+  return niveles[key] || niveles[1];
+};
+
+// ============================================================================
+// 🧩 FUNCIONES AUXILIARES
+// ============================================================================
+function normalizarEstudiante(s) {
+  const historiasArray = Array.isArray(s.historias) ? s.historias : [];
+  const historiasNorm = historiasArray.map(h => ({
+    id: h.id || h.story_id,
+    title: h.title || h.story?.title || 'Sin título',
+    created_at: h.created_at || h.story?.created_at || h.fecha_creacion,
+    points: Number(h.points ?? h.puntos ?? 0)
+  }));
+
+  // ✅ Si 'matriculado' no viene o es false, usa 'activo' como referencia
+  const matriculado = (
+      s.matriculado === true ||
+      s.matriculado === 1 ||
+      s.matriculado === '1' ||
+      (typeof s.matriculado === 'string' && s.matriculado.toLowerCase() === 'true') ||
+      s.activo === true ||
+      s.activo === 1 ||
+      s.activo === '1'
+  );
+
+  return {
+    id: s.id || s.user_id || s.alumno_id,
+    fullname: s.fullname || [s.nombre, s.apellido].filter(Boolean).join(' ') || 'Sin nombre',
+    email: s.email || '-',
+    current_level: Number(s.current_level || s.nivel || 1),
+    total_points: Number(s.total_points ?? s.puntos_totales ?? 0),
+    total_historias: Number(s.total_historias ?? historiasNorm.length),
+    total_actividades: Number(s.total_actividades ?? s.actividades_completadas ?? 0),
+    historias: historiasNorm,
+    matriculado, // ✅ Usa la lógica combinada
+  };
+}
+
+
+function calcularEstadisticas(lista) {
+  if (!Array.isArray(lista)) return {
+    total_estudiantes: 0,
+    total_historias: 0,
+    total_actividades: 0,
+    promedio_puntos: 0
+  };
+
+  // ✅ Filtrar explícitamente estudiantes matriculados
+  const matriculados = lista.filter(e => e.matriculado);
+
+  if (matriculados.length === 0) {
+    return {
+      total_estudiantes: 0,
+      total_historias: 0,
+      total_actividades: 0,
+      promedio_puntos: 0
+    };
+  }
+
+  const total_estudiantes = matriculados.length;
+  let total_historias = 0;
+  let total_actividades = 0;
+  let suma_puntos = 0;
+
+  matriculados.forEach((e) => {
+    const historias = Array.isArray(e.historias)
+        ? e.historias.length
+        : Number(e.total_historias || 0);
+
+    const actividades = Number(e.total_actividades || 0);
+    const puntos = Number(e.total_points || 0);
+
+    total_historias += historias;
+    total_actividades += actividades;
+    suma_puntos += puntos;
+  });
+
+  const promedio_puntos = Math.round(suma_puntos / total_estudiantes);
+
+  return {
+    total_estudiantes,
+    total_historias,
+    total_actividades,
+    promedio_puntos
+  };
+}
+
+
+
+function calcularRanking(lista, tipo) {
+  const matriculados = lista.filter(e => e.matriculado);
+
+  const getMetric = (e) => {
+    switch (tipo) {
+      case 'historias':   return e.total_historias || (e.historias?.length || 0);
+      case 'actividades': return e.total_actividades || 0;
+      default:            return e.total_points || 0;
+    }
+  };
+
+  return matriculados
+      .slice()
+      .sort((a, b) => getMetric(b) - getMetric(a))
+      .slice(0, 3);
+}
+
+
+function construirActividadReciente(lista) {
+  const matriculados = lista.filter(e => e.matriculado);
+
+  const items = [];
+  matriculados.forEach(est => {
+    (est.historias || []).forEach(hist => {
+      items.push({
+        id: `${est.id}-${hist.id}`,
+        estudiante_nombre: est.fullname,
+        tipo: 'historia_creada',
+        descripcion: `Creó la historia "${hist.title}"`,
+        puntos: hist.points || 0,
+        fecha: hist.created_at
+      });
+    });
+  });
+
+  return items
+      .filter(i => i.fecha)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .slice(0, 3);
+}
+
+const recargarEstudiantes = () => {
+  cargarDatos()
+}
+
+const verDetalleEstudiante = (id) => {
+  router.push(`/estudiante/${id}`)
+}
+
+const getInitials = (nombre) => {
+  return nombre ? nombre.split(' ').map(n => n[0]).join('').toUpperCase() : '??'
+}
+
+const getNivelClase = (nivel) => {
+  const clases = {
+    '1': 'Principiante',
+    '2': 'Explorador',
+    '3': 'Aventurero',
+    '4': 'Maestro'
+  }
+  return clases[nivel] || 'Principiante'
+}
+
+const getRankingClass = (index) => {
+  if (index === 0) return 'ranking-first'
+  if (index === 1) return 'ranking-second'
+  if (index === 2) return 'ranking-third'
+  return ''
+}
+
+const getRankingMedal = (index) => ['🥇', '🥈', '🥉', '🏅'][index] || '⭐'
+
+const getRankingValue = (est) => {
+  switch (tipoRanking.value) {
+    case 'historias':   return `${est.total_historias || 0} historias`
+    case 'actividades': return `${est.total_actividades || 0} actividades`
+    default:            return `${est.total_points || 0} puntos`
+  }
+}
+
+const getRankingProgress = (est, index) => {
+  const metric = (e) => {
+    switch (tipoRanking.value) {
+      case 'historias':   return e.total_historias || 0
+      case 'actividades': return e.total_actividades || 0
+      default:            return e.total_points || 0
+    }
+  }
+
+  if (index === 0) return 100
+  const maxValue = rankingEstudiantes.value.length ? metric(rankingEstudiantes.value[0]) : 1
+  const currentValue = metric(est)
+  return Math.max(10, Math.round((currentValue / maxValue) * 100))
+}
+
+const getActividadIcon = (tipo) => ({
+  historia_completada: '📖',
+  actividad_completada: '🎯',
+  historia_creada: '✨',
+  pregunta_respondida: '❓',
+  actividad_reciente: '📈'
+}[tipo] || '📝')
+
+const formatTimeAgo = (fechaStr) => {
+  if (!fechaStr) return ''
+  const fecha = new Date(fechaStr)
+  const diffMs = Date.now() - fecha
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays > 0) return `hace ${diffDays} día${diffDays > 1 ? 's' : ''}`
+  if (diffHours > 0) return `hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`
+  return 'hace unos momentos'
+}
+
+// ============================================================================
+// 🔄 LIFECYCLE
+// ============================================================================
+onMounted(() => {
+  cargarDatos()
+})
 </script>
 
 <style scoped>
+.nivel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: #f5f5f5;
+  color: #333;
+  transition: 0.3s;
+}
+
+.nivel-principiante {
+  background-color: #e0f7fa;
+  color: #006064;
+}
+
+.nivel-explorador {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.nivel-aventurero {
+  background-color: #fff8e1;
+  color: #f57f17;
+}
+
+.nivel-maestro {
+  background-color: #f3e5f5;
+  color: #4a148c;
+}
+
 .dashboard-docente-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

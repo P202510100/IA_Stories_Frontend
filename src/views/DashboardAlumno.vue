@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-alumno">
     <div class="container">
-      
+
       <!-- Header con bienvenida -->
       <div class="welcome-header">
         <div class="welcome-content">
@@ -16,16 +16,19 @@
           </div>
         </div>
       </div>
-
-      <!-- Loading state -->
-      <div v-if="loading" class="loading-container">
-        <div class="loading-spinner"></div>
-        <p>Cargando tu panel...</p>
+      <!-- Estado vacío -->
+      <div v-if="!estadisticas || estadisticas.total_historias === 0" class="empty-state">
+        <div class="empty-icon">🌟</div>
+        <h3>¡Comienza tu aventura!</h3>
+        <p>Aún no has creado ninguna historia. ¡Es hora de comenzar!</p>
+        <button @click="irACrearHistoria" class="btn btn-primary">
+          ✨ Crear Mi Primera Historia
+        </button>
       </div>
 
-      <!-- Main content -->
-      <div v-else-if="!error" class="dashboard-content">
-        
+      <!-- Contenido principal -->
+      <div v-if="!error" class="dashboard-content">
+
         <!-- Estadísticas principales -->
         <div class="stats-section">
           <h2>📊 Tus Estadísticas</h2>
@@ -37,7 +40,7 @@
                 <div class="stat-label">Historias Leídas</div>
               </div>
             </div>
-            
+
             <div class="stat-card">
               <div class="stat-icon">⭐</div>
               <div class="stat-info">
@@ -45,7 +48,7 @@
                 <div class="stat-label">Puntos Totales</div>
               </div>
             </div>
-            
+
             <div class="stat-card">
               <div class="stat-icon">🎯</div>
               <div class="stat-info">
@@ -53,7 +56,7 @@
                 <div class="stat-label">Actividades</div>
               </div>
             </div>
-            
+
             <div class="stat-card">
               <div class="stat-icon">📈</div>
               <div class="stat-info">
@@ -73,19 +76,19 @@
               <h3>Crear Nueva Historia</h3>
               <p>Deja que la IA cree una aventura especial para ti</p>
             </div>
-            
+
             <div @click="irAMisHistorias" class="action-card">
               <div class="action-icon">📖</div>
               <h3>Mis Historias</h3>
               <p>Ve todas las historias que has creado</p>
             </div>
-            
+
             <div @click="irARanking" class="action-card">
               <div class="action-icon">🏆</div>
               <h3>Ranking de Clase</h3>
               <p>Ve cómo te comparas con tus compañeros</p>
             </div>
-            
+
             <div @click="irAPerfil" class="action-card">
               <div class="action-icon">⚙️</div>
               <h3>Mi Perfil</h3>
@@ -93,45 +96,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Historias recientes
-        <div v-if="historiasRecientes.length > 0" class="recent-section">
-          <h2>📖 Tus Historias Recientes</h2>
-          <div class="recent-grid">
-            <div
-              v-for="historia in historiasRecientes"
-              :key="historia.id"
-              @click="verHistoria(historia.id)"
-              class="historia-card"
-            >
-              <div class="historia-header">
-                <div class="historia-icon">{{ getEmojiTema(historia.tema) }}</div>
-                <div class="historia-date">{{ formatDate(historia.created_at) }}</div>
-              </div>
-              <div class="historia-content">
-                <h3>{{ historia.titulo }}</h3>
-                <p class="historia-tema">{{ getTemaLabel(historia.tema) }}</p>
-                <div class="historia-stats" v-if="historia.puntos_obtenidos">
-                  <span class="puntos">⭐ {{ historia.puntos_obtenidos }} puntos</span>
-                </div>
-              </div>
-              <div class="historia-action">
-                <span class="btn-small">Leer →</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        -->
-        <!-- Estado vacío -->
-        <div  class="empty-state">
-          <div class="empty-icon">🌟</div>
-          <h3>¡Comienza tu aventura!</h3>
-          <p>Aún no has creado ninguna historia. ¡Es hora de comenzar!</p>
-          <button @click="irACrearHistoria" class="btn btn-primary">
-            ✨ Crear Mi Primera Historia
-          </button>
-        </div>
-
       </div>
 
       <!-- Error state -->
@@ -148,206 +112,105 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import api from "@/services/api.js";
+import { useLoaderStore } from '../stores/loaderStore'
+import api from '../services/api.js'
 
-export default {
-  name: 'DashboardAlumno',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
 
-    // Estado del componente
-    const loading = ref(true)
-    const error = ref(null)
-    const estadisticas = ref(null)
+// Estado local (solo para errores y datos)
+const error = ref(null)
+const estadisticas = ref(null)
 
-    // Computed properties
-    const profile = computed(() => authStore.profile)
-    const user = computed(() => authStore.user)
+// Computed
+const profile = computed(() => authStore.profile)
+const user = computed(() => authStore.user)
 
+// 🔄 Carga de datos principal
+async function cargarDatosDashboard() {
+  error.value = null
+  try {
+    const usuarioActual = profile.value || user.value || authStore.user
+    if (!usuarioActual?.id) {
+      throw new Error('No se pudo cargar la información del usuario. Inicia sesión nuevamente.')
+    }
 
-    // ============================================================================
-    // 🚀 LIFECYCLE
-    // ============================================================================
-    
-    onMounted(async () => {
-      console.log('🏠 Iniciando Dashboard Alumno...')
-      console.log('profile in dashbaordlaumno: ', profile.value.fullname)
-      // Verificar autenticación
-      if (!authStore.isAuthenticated || !authStore.isAlumno) {
-        console.error('❌ Acceso no autorizado')
-        router.push('/login')
-        return
-      }
-
-      await cargarDatosDashboard()
+    loader.show({
+      message: 'Cargando tu panel...',
+      submessage: 'Obteniendo estadísticas desde el servidor',
+      type: 'book'
     })
 
-    // ============================================================================
-    // 🔄 CARGA DE DATOS
-    // ============================================================================
-    
-    async function cargarDatosDashboard() {
-        loading.value = true
-        error.value = null
+    const records = await api.cargarHistoriasPorAlumno(usuarioActual.id)
 
-        try {
-          const usuarioActual = profile.value || user.value || authStore.user
-          if (!usuarioActual?.id) {
-            throw new Error("No se pudo cargar la información del usuario. Inicia sesión nuevamente.")
-          }
+    const totalHistorias = records.length
+    const puntosTotales = records.reduce((sum, r) => sum + (r.points || 0), 0)
+    const totalCorrectas = records.reduce((sum, r) => sum + (r.correct_answers || 0), 0)
+    const totalPreguntas = records.reduce((sum, r) => sum + (r.total_questions || 0), 0)
+    const totalRespondidas = records.reduce((sum, r) => {
+      const respondidas = r.status === 'COMPLETED' ? (r.total_questions || 0) : (r.correct_answers || 0)
+      return sum + respondidas
+    }, 0)
+    const precision = totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0
 
-          console.log("📊 Cargando estadísticas del alumno:", usuarioActual.id)
-
-          // Traer historias/records del backend
-          const records = await api.cargarHistoriasPorAlumno(usuarioActual.id)
-
-          const totalHistorias = records.length
-          const puntosTotales = records.reduce((sum, r) => sum + (r.points || 0), 0)
-
-          // respuestas correctas / total respondidas
-          const totalCorrectas = records.reduce((sum, r) => sum + (r.correct_answers || 0), 0)
-          const totalPreguntas = records.reduce((sum, r) => sum + (r.total_questions || 0), 0)
-
-          // 🔑 Aquí definimos "actividades" como la suma de todas las respondidas (correctas + incorrectas)
-          const totalRespondidas = records.reduce((sum, r) => {
-            const respondidas = r.status === "COMPLETED" ? (r.total_questions || 0) : (r.correct_answers || 0)
-            return sum + respondidas
-          }, 0)
-
-          const precision = totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0
-
-          estadisticas.value = {
-            total_historias: totalHistorias,
-            puntos_totales: puntosTotales,
-            total_actividades: totalRespondidas,
-            promedio_respuestas: precision,
-            nivel_actual: { nombre: "Principiante" } // luego puedes escalar niveles por puntos
-          }
-
-          console.log("✅ Estadísticas calculadas:", estadisticas.value)
-
-        } catch (err) {
-          console.error("❌ Error cargando dashboard:", err)
-          error.value = err.message || "Error cargando la información del dashboard"
-        } finally {
-          loading.value = false
-        }
+    estadisticas.value = {
+      total_historias: totalHistorias,
+      puntos_totales: puntosTotales,
+      total_actividades: totalRespondidas,
+      promedio_respuestas: precision,
+      nivel_actual: { nombre: 'Principiante' }
     }
 
-
-
-
-    async function recargarDatos() {
-      await cargarDatosDashboard()
-    }
-
-    // ============================================================================
-    // 🧭 NAVEGACIÓN
-    // ============================================================================
-    
-    function irACrearHistoria() {
-      router.push('/crear-historia')
-    }
-
-    function irAMisHistorias() {
-      router.push('/mis-historias')
-    }
-
-    function irARanking() {
-      router.push('/ranking')
-    }
-
-    function irAPerfil() {
-      router.push('/perfil')
-    }
-
-    function verHistoria(historiaId) {
-      router.push(`/historia/${historiaId}`)
-    }
-
-    // ============================================================================
-    // 🔧 MÉTODOS AUXILIARES
-    // ============================================================================
-    
-    function getEmojiTema(tema) {
-      const emojis = {
-        'aventura': '🗺️',
-        'fantasia': '🧙‍♂️',
-        'espacio': '🚀',
-        'naturaleza': '🌿',
-        'misterio': '🔍',
-        'ciencia': '🔬',
-        'deportes': '⚽',
-        'amistad': '👫'
-      }
-      return emojis[tema] || '📚'
-    }
-
-    function getTemaLabel(tema) {
-      const labels = {
-        'aventura': 'Aventura',
-        'fantasia': 'Fantasía',
-        'espacio': 'Espacio',
-        'naturaleza': 'Naturaleza',
-        'misterio': 'Misterio',
-        'ciencia': 'Ciencia',
-        'deportes': 'Deportes',
-        'amistad': 'Amistad'
-      }
-      return labels[tema] || tema
-    }
-
-    function formatDate(dateString) {
-      if (!dateString) return ''
-      
-      try {
-        const date = new Date(dateString)
-        const now = new Date()
-        const diffTime = now - date
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-        
-        if (diffDays === 0) return 'Hoy'
-        if (diffDays === 1) return 'Ayer'
-        if (diffDays < 7) return `Hace ${diffDays} días`
-        
-        return date.toLocaleDateString('es-ES', { 
-          day: 'numeric', 
-          month: 'short' 
-        })
-      } catch (e) {
-        return ''
-      }
-    }
-
-    return {
-      // Estado
-      loading,
-      error,
-      estadisticas,
-      
-      // Computed
-      profile,
-      user,
-
-      // Métodos
-      recargarDatos,
-      irACrearHistoria,
-      irAMisHistorias,
-      irARanking,
-      irAPerfil,
-      verHistoria,
-      getEmojiTema,
-      getTemaLabel,
-      formatDate
-    }
+  } catch (err) {
+    console.error('❌ Error cargando dashboard:', err)
+    error.value = err.message || 'Error cargando la información del dashboard'
+  } finally {
+    loader.hide()
   }
 }
+
+// 🔁 Recargar
+async function recargarDatos() {
+  await cargarDatosDashboard()
+}
+
+// 🧭 Navegación
+const irACrearHistoria = () => router.push('/crear-historia')
+const irAMisHistorias = () => router.push('/mis-historias')
+const irARanking = () => router.push('/ranking')
+const irAPerfil = () => router.push('/perfil')
+const verHistoria = (id) => router.push(`/historia/${id}`)
+
+// 📅 Utilidades
+function formatDate(dateString) {
+  if (!dateString) return ''
+  try {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24))
+    if (diff === 0) return 'Hoy'
+    if (diff === 1) return 'Ayer'
+    if (diff < 7) return `Hace ${diff} días`
+    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+  } catch {
+    return ''
+  }
+}
+
+onMounted(async () => {
+  if (!authStore.isAuthenticated || !authStore.isAlumno) {
+    router.push('/login')
+    return
+  }
+  await cargarDatosDashboard()
+})
 </script>
+
 
 <style scoped>
 .dashboard-alumno {
@@ -624,6 +487,7 @@ export default {
   background: white;
   border-radius: 20px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  margin-bottom: 50px;
 }
 
 .empty-icon {

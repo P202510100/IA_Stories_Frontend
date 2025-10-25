@@ -194,165 +194,160 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useLoaderStore } from '../stores/loaderStore'
+import { parseApiError } from '../utils/errorHandler'
 
-export default {
-  name: 'Register',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
+// --------------------------
+// 📦 Stores y router
+// --------------------------
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
 
-    const formData = ref({
-      tipo: '',
-      nombre: '',
-      email: '',
-      password: '',
-      birth_date: '',
-      grado: '',
-      institucion: '',
-      alma_mater: '',
-      degree_level: '',
-      major: ''
+// --------------------------
+// 🧩 Datos reactivos
+// --------------------------
+const formData = ref({
+  tipo: '',
+  nombre: '',
+  email: '',
+  password: '',
+  birth_date: '',
+  grado: '',
+  institucion: '',
+  alma_mater: '',
+  degree_level: '',
+  major: ''
+})
+
+const formError = ref('')
+
+// --------------------------
+// 🔐 Validación de contraseña
+// --------------------------
+const pw = computed(() => formData.value.password || '')
+const pwRules = computed(() => ({
+  lower: /[a-z]/.test(pw.value),
+  upper: /[A-Z]/.test(pw.value),
+  num: /\d/.test(pw.value),
+  sym: /[^A-Za-z0-9]/.test(pw.value),
+  len: pw.value.length >= 8
+}))
+
+const passwordPattern = computed(() =>
+    '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$'
+)
+
+const passwordStrength = computed(() => {
+  const score = Object.values(pwRules.value).filter(Boolean).length
+  if (score <= 2) return { level: 'weak', percent: 33, label: 'Contraseña débil' }
+  if (score <= 4) return { level: 'medium', percent: 66, label: 'Contraseña media' }
+  return { level: 'strong', percent: 100, label: 'Contraseña fuerte' }
+})
+
+const gradosDisponibles = computed(() => [
+  '1° Primaria', '2° Primaria', '3° Primaria', '4° Primaria', '5° Primaria', '6° Primaria',
+  '1° Secundaria', '2° Secundaria', '3° Secundaria', '4° Secundaria', '5° Secundaria'
+])
+
+const isFormValid = computed(() => {
+  const baseValid =
+      formData.value.tipo &&
+      formData.value.nombre &&
+      formData.value.email &&
+      formData.value.password
+
+  if (formData.value.tipo === 'student') {
+    return baseValid && formData.value.birth_date && formData.value.grado
+  } else if (formData.value.tipo === 'teacher') {
+    return (
+        baseValid &&
+        formData.value.institucion &&
+        formData.value.alma_mater &&
+        formData.value.degree_level &&
+        formData.value.major
+    )
+  }
+  return baseValid
+})
+
+// --------------------------
+// 🚀 Registro
+// --------------------------
+const handleRegister = async () => {
+  formError.value = ''
+  authStore.clearError()
+
+  if (!isFormValid.value) {
+    formError.value = 'Por favor completa todos los campos requeridos.'
+    return
+  }
+
+  if (passwordStrength.value.level === 'weak') {
+    formError.value = 'La contraseña es demasiado débil.'
+    return
+  }
+
+  try {
+    loader.show({
+      message: 'Creando tu cuenta...',
+      submessage: 'Estamos preparando tu espacio de lectura ✨',
+      type: 'heart'
     })
 
-    const formError = ref('')
-    // ✅ Reglas individuales (regex amplia para símbolo: cualquier no alfanumérico)
-    const pw = computed(() => formData.value.password || '')
-    const pwRules = computed(() => ({
-      lower: /[a-z]/.test(pw.value),
-      upper: /[A-Z]/.test(pw.value),
-      num: /\d/.test(pw.value),
-      sym: /[^A-Za-z0-9]/.test(pw.value),  // ← clave: símbolo amplio (#.-_ también cuentan)
-      len: pw.value.length >= 8
-    }))
-
-    // ✅ Patrón del input para validación nativa (opcional pero útil)
-    const passwordPattern = computed(() => '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$')
-
-    // ✅ Fuerza calculada automáticamente (sin depender de eventos)
-    const passwordStrength = computed(() => {
-      const score = Object.values(pwRules.value).filter(Boolean).length // 0..5
-      if (score <= 2) return { level: 'weak',   percent: 33, label: 'Contraseña débil' }
-      if (score <= 4) return { level: 'medium', percent: 66, label: 'Contraseña media' }
-      return { level: 'strong', percent: 100, label: 'Contraseña fuerte' }
-    })
-
-    const checkPasswordStrength = () => {
-      const pwd = formData.value.password
-      if (!pwd) {
-        passwordStrength.value = ''
-        return
-      }
-
-      let score = 0
-      if (/[a-z]/.test(pwd)) score++
-      if (/[A-Z]/.test(pwd)) score++
-      if (/\d/.test(pwd)) score++
-      if (/[@$!%*?&]/.test(pwd)) score++
-      if (pwd.length >= 8) score++
-
-      if (score <= 2) passwordStrength.value = 'weak'
-      else if (score <= 4) passwordStrength.value = 'medium'
-      else passwordStrength.value = 'strong'
+    const userData = {
+      fullname: formData.value.nombre,
+      email: formData.value.email,
+      password: formData.value.password,
+      tipo: formData.value.tipo
     }
 
-    const gradosDisponibles = computed(() => [
-      '1° Primaria', '2° Primaria', '3° Primaria', '4° Primaria', '5° Primaria', '6° Primaria',
-      '1° Secundaria', '2° Secundaria', '3° Secundaria', '4° Secundaria', '5° Secundaria'
-    ])
-
-    const isFormValid = computed(() => {
-      const baseValid = formData.value.tipo && formData.value.nombre &&
-          formData.value.email && formData.value.password
-
-      if (formData.value.tipo === 'student') {
-        return baseValid && formData.value.birth_date && formData.value.grado
-      } else if (formData.value.tipo === 'teacher') {
-        return baseValid && formData.value.institucion && formData.value.alma_mater && formData.value.degree_level && formData.value.major
+    if (formData.value.tipo === 'student') {
+      userData.student_profile = {
+        birth_date: formData.value.birth_date,
+        current_grade: formData.value.grado
       }
-      return baseValid
-    })
-
-    onMounted(() => {
-      authStore.clearError()
-      if (authStore.isAuthenticated) redirectToDashboard()
-    })
-
-    const handleRegister = async () => {
-      formError.value = ''
-      if (!isFormValid.value) {
-        formError.value = 'Por favor completa todos los campos requeridos'
-        return
-      }
-
-      if (passwordStrength.value === 'weak') {
-        formError.value = 'La contraseña es demasiado débil'
-        return
-      }
-
-      try {
-        const userData = {
-          fullname: formData.value.nombre,
-          email: formData.value.email,
-          password: formData.value.password,
-          tipo: formData.value.tipo
-        }
-
-        if (formData.value.tipo === 'student') {
-          userData.student_profile = {
-            birth_date: formData.value.birth_date,
-            current_grade: formData.value.grado
-          }
-        } else if (formData.value.tipo === 'teacher') {
-          userData.teacher_profile = {
-            current_school: formData.value.institucion,
-            alma_mater: formData.value.alma_mater,
-            degree_level: formData.value.degree_level,
-            major: formData.value.major
-          }
-        }
-
-        await authStore.register(userData)
-        redirectToDashboard()
-
-      } catch (error) {
-        console.error('❌ Error en registro:', error)
-
-        // Normalización de errores
-        if (error.response?.status === 409) {
-          authStore.error.value = 'El correo ya está registrado'
-        } else if (error.response?.status >= 500) {
-          authStore.error.value = 'Error en el servidor, inténtalo más tarde'
-        } else {
-          authStore.error.value = 'Error inesperado en el registro'
-        }
+    } else if (formData.value.tipo === 'teacher') {
+      userData.teacher_profile = {
+        current_school: formData.value.institucion,
+        alma_mater: formData.value.alma_mater,
+        degree_level: formData.value.degree_level,
+        major: formData.value.major
       }
     }
 
-    const redirectToDashboard = () => {
-      const userType = authStore.userType
-      if (userType === 'student') router.push('/dashboard-alumno')
-      else if (userType === 'teacher') router.push('/dashboard-docente')
-    }
-
-    return {
-      formData,
-      authStore,
-      gradosDisponibles,
-      isFormValid,
-      handleRegister,
-      formError,
-      passwordStrength,
-      passwordPattern,
-      pwRules,
-      checkPasswordStrength
-    }
+    await authStore.register(userData)
+    redirectToDashboard()
+  } catch (error) {
+    console.error('❌ Error en registro:', error)
+    authStore.error = parseApiError(error)
+  } finally {
+    loader.hide()
   }
 }
+
+// --------------------------
+// 🎯 Redirección post-registro
+// --------------------------
+const redirectToDashboard = () => {
+  const userType = authStore.user?.tipo
+  if (userType === 'student') router.push('/dashboard-alumno')
+  else if (userType === 'teacher') router.push('/dashboard-docente')
+}
+
+// --------------------------
+// ⚡ Lifecycle
+// --------------------------
+onMounted(() => {
+  authStore.clearError()
+  if (authStore.isAuthenticated) redirectToDashboard()
+})
 </script>
+
 
 <style scoped>
 /* Quitar marco por defecto del fieldset */

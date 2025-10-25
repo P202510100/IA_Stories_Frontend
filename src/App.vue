@@ -20,12 +20,8 @@
     
     <!-- Sistema de notificaciones -->
     <ToastNotification />
-    
-    <!-- Overlay de loading global -->
-    <div v-if="globalLoading" class="global-loading">
-      <div class="loading-spinner"></div>
-      <p>Cargando...</p>
-    </div>
+    <GlobalLoader />
+
     
     <!-- Conexión perdida -->
     <div v-if="!isOnline" class="offline-banner">
@@ -40,10 +36,12 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import NavBar from './components/NavBar.vue'
 import ToastNotification from './components/ToastNotification.vue'
+import GlobalLoader from "@/components/GlobalLoader.vue";
 
 export default {
   name: 'App',
   components: {
+    GlobalLoader,
     NavBar,
     ToastNotification
   },
@@ -545,35 +543,6 @@ body {
   margin: 16px 0;
   border-left: 4px solid #ef6c00;
   backdrop-filter: blur(10px);
-}
-
-/* ============================================================================ */
-/* LOADING SPINNER GLOBAL */
-/* ============================================================================ */
-
-.global-loading {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.loading-spinner {
-  width: 60px;
-  height: 60px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
 }
 
 @keyframes spin {

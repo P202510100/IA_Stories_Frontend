@@ -26,9 +26,14 @@
           </div>
         </div>
 
-        <!-- Imagen de la historia -->
-        <div v-if="historia.imagen" class="historia-imagen">
-          <img :src="`data:image/png;base64,${historia.imagen}`" alt="Imagen de la historia" />
+        <!-- Imagen con efecto Tilt -->
+        <div v-if="historia.imagen" class="historia-imagen-wrapper" ref="tiltWrap">
+          <img
+              :src="`data:image/png;base64,${historia.imagen}`"
+              alt="Imagen de la historia"
+              class="imagen-tilt"
+              ref="tiltImg"
+          />
         </div>
 
         <!-- Contenido de la historia -->
@@ -204,11 +209,14 @@
 </template>
 
 <script>
-import {computed, onMounted, ref} from 'vue'
+import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useAuthStore} from '../stores/auth'
-import api from "@/services/api.js";
-import apiService from "@/services/api.js";
+import api from "../services/api.js";
+import apiService from "../services/api.js";
+import VanillaTilt from "vanilla-tilt";
+import { nextTick } from "vue";
+
 
 export default {
   name: 'VerHistoria',
@@ -219,6 +227,10 @@ export default {
 
     const saving = ref(false)
     const savedOnce = ref(false)
+
+    const tiltImg = ref(null);
+    const tiltWrap = ref(null);
+
 
     const historia = ref({})
     const preguntas = ref([])
@@ -329,6 +341,30 @@ export default {
       }
       await cargarHistoriaCompleta()
     })
+
+    watch(historia, async (nueva, antigua) => {
+      // destruir tilt previo
+      if (antigua?.imagen && tiltImg.value?.vanillaTilt) {
+        tiltImg.value.vanillaTilt.destroy();
+      }
+
+      if (!nueva?.imagen) return;
+      await nextTick();
+
+      // inicializar Tilt sobre el <img ref="tiltImg">
+      if (tiltImg.value) {
+        VanillaTilt.init(tiltImg.value, {
+          max: 15,
+          speed: 300,
+          scale: 1.05,
+          glare: true,
+          "max-glare": 0.4,
+          gyroscope: true,
+          reset: true,
+        });
+        console.log("✨ VanillaTilt inicializado en VerHistoria.vue");
+      }
+    });
 
 
     async function confirmarReinicio() {
@@ -577,12 +613,29 @@ export default {
         year: 'numeric'
       })
     }
-    return { confirmarReinicio, saving, guardarProgreso, finalizarExamen, historia, preguntas, loading, loadingPreguntas, error, profile, personajes, preguntasRespondidas, todasPreguntasRespondidas, puntosObtenidos, recargarHistoria, responderPregunta, responderPreguntaTexto, repetirPregunta, volverAtras, verOtraHistoria, crearNuevaHistoria, getTemaLabel, getTipoPreguntaLabel, getParrafos, formatDate }
+    return { tiltImg, tiltWrap, confirmarReinicio, saving, guardarProgreso, finalizarExamen, historia, preguntas, loading, loadingPreguntas, error, profile, personajes, preguntasRespondidas, todasPreguntasRespondidas, puntosObtenidos, recargarHistoria, responderPregunta, responderPreguntaTexto, repetirPregunta, volverAtras, verOtraHistoria, crearNuevaHistoria, getTemaLabel, getTipoPreguntaLabel, getParrafos, formatDate }
   }
 }
 </script>
 
 <style scoped>
+.historia-imagen-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 2rem auto;
+  width: 100%;
+  max-width: 600px;
+}
+
+.imagen-tilt {
+  width: 100%;
+  max-width: 600px;
+  border-radius: 16px;
+  transition: transform 0.3s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
 .ver-historia {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

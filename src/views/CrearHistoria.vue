@@ -7,13 +7,11 @@
       </div>
 
       <!-- Formulario de creación -->
-      <div v-if="!historiaGenerada && !generando && !mostrarPreguntas" class="historia-form">
+      <div v-if="!historiaGenerada && !mostrarPreguntas" class="historia-form">
         <form @submit.prevent="crearHistoria" class="form">
-          
           <!-- Selección de tema -->
           <div class="form-group">
             <label for="tema">🎯 Elige tu tema favorito:</label>
-
             <select
                 id="tema"
                 v-model="formData.tema"
@@ -28,7 +26,6 @@
               <option value="ciencia">🔬 Ciencia</option>
               <option value="libre">✏️ Otro (escribe tu propio tema)</option>
             </select>
-
             <!-- Campo libre si elige “otro” -->
             <div v-if="temaLibreActivo" class="tema-libre-input">
               <input
@@ -50,7 +47,6 @@
               Por favor selecciona un tema
             </div>
           </div>
-
           <!-- Nombre del protagonista -->
           <div class="form-group">
             <label for="nombre_protagonista">🦸‍♂️ Nombre del protagonista:</label>
@@ -62,7 +58,6 @@
               maxlength="50"
             />
           </div>
-
           <!-- Edad del protagonista -->
           <div class="form-group">
             <label for="edad_protagonista">🎂 Edad del protagonista:</label>
@@ -73,62 +68,50 @@
               </option>
             </select>
           </div>
-
           <!-- Elementos especiales -->
           <div class="form-group">
             <label>✨ Elementos especiales:</label>
             <div class="elementos-input">
               <input
                   type="text"
-                  v-model="formData.elementos"
-                  placeholder="Escribe y presiona Enter"
-                  @keyup.enter.prevent="agregarElemento"
+                  v-model="elementosInput"
+                  placeholder="Escribe un elemento y presiona Enter o coma (,)"
+                  @keydown.enter.stop.prevent="agregarElemento"
+                  @blur="agregarElemento"
                   class="chips-input"
               />
-              <small class="note-small">(Puedes escribir varios separados por coma)</small>
+            </div>
+            <!-- Chips visibles -->
+            <div v-if="elementosLista.length" class="chips-list">
+              <span v-for="(el, i) in elementosLista" :key="i" class="chip">
+                {{ el }}
+                <button type="button" class="chip-remove" @click="eliminarElemento(i)">×</button>
+              </span>
+            </div>
+            <!-- Mensaje guía -->
+            <div v-else class="hint-message">
+              <small>💡 Escribe palabras clave (por ejemplo: <strong>dragón, castillo</strong>) y presiona <strong>Enter</strong> o <strong>,</strong> para agregarlas.</small>
             </div>
           </div>
-
           <!-- Botón de crear -->
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" :disabled="!formularioCompleto || generando">
+            <button type="submit" class="btn btn-primary" :disabled="!formularioCompleto">
               🚀 Crear Mi Historia
             </button>
           </div>
         </form>
       </div>
-
-      <!-- Loading de generación mejorado -->
-      <div v-if="generando" class="loading-historia">
-        <div class="loading-animation">
-          <div class="loading-circle"></div>
-          <div class="loading-circle"></div>
-          <div class="loading-circle"></div>
-        </div>
-
-        <h3>{{ loadingTitulo }}</h3>
-
-        <ul class="loading-steps">
-          <li v-for="(step, index) in loadingSteps" :key="index"
-              :class="{
-          completado: index < loadingPaso,
-          activo: index === loadingPaso,
-          pendiente: index > loadingPaso
-          }">
-            <span class="icono-step">
-              {{ index < loadingPaso ? '✅' : index === loadingPaso ? '⚙️' : '⏳' }}
-            </span>
-            {{ step }}
-          </li>
-        </ul>
-      </div>
-
       <!-- Historia generada -->
       <div v-if="historiaGenerada && !mostrarPreguntas && !juegoCompletado" class="historia-resultado">
-        <div v-if="historiaGenerada.image_b64" class="historia-imagen">
-          <img :src="`data:image/png;base64,${historiaGenerada.image_b64}`" alt="Imagen de la historia" />
+        <div v-if="historiaGenerada.image_b64" class="historia-imagen-wrapper" ref="tiltWrap">
+          <!-- Imagen con efecto tilt -->
+          <img
+              :src="`data:image/png;base64,${historiaGenerada.image_b64}`"
+              alt="Imagen generada"
+              class="imagen-tilt"
+              ref="tiltImg"
+          />
         </div>
-
         <div class="historia-header">
           <h2>📖 {{ historiaGenerada.titulo }}</h2>
           <div class="historia-info">
@@ -279,7 +262,8 @@
 import {ref, onMounted, computed, watch, nextTick} from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import apiService from "@/services/api.js";
+import apiService from "../services/api.js";
+import VanillaTilt from "vanilla-tilt";
 
 export default {
   name: 'CrearHistoria',
@@ -296,10 +280,10 @@ export default {
       elementos: ''
     })
 
-    const generando = ref(false)
     const error = ref(null)
 
-
+    const tiltImg = ref(null)
+    const tiltWrap = ref(null)
 
     // Computed properties - Formulario
     const profile = computed(() => authStore.profile)
@@ -323,9 +307,11 @@ export default {
     const temas = ref([
       { id: "aventura", nombre: "Aventura", descripcion: "Explora mundos desconocidos", icono: "🗺️" },
       { id: "fantasia", nombre: "Fantasía", descripcion: "Magia y criaturas míticas", icono: "🪄" },
-      { id: "ciencia", nombre: "Ciencia", descripcion: "Explora la ciencia y el futuro", icono: "🔬" },
-      { id: "libre", nombre: "Libre", descripcion: "Escribe tu propio tema", icono: "✍️" }
-    ])
+      { id: "ciencia",  nombre: "Ciencia",  descripcion: "Explora la ciencia y el futuro", icono: "🔬" },
+      { id: "misterio", nombre: "Misterio", descripcion: "Resuelve enigmas y casos", icono: "🕵️" },
+      { id: "amistad",  nombre: "Amistad",  descripcion: "Lazos y valores", icono: "🤝" },
+      { id: "libre",    nombre: "Libre",    descripcion: "Escribe tu propio tema", icono: "✍️" }
+    ]);
 
     const edadesDisponibles = computed(() => Array.from({ length: 11 }, (_, i) => i + 5))
 
@@ -339,12 +325,35 @@ export default {
           tieneTema &&
           formData.value.nombre_protagonista.trim().length > 0 &&
           formData.value.edad_protagonista &&
-          formData.value.elementos.trim().length > 0
+          elementosLista.value.length > 0
       );
     });
 
     // Reactive states
     const temaLibreActivo = ref(false)
+
+    // --- Chips de elementos ---
+    const elementosLista = ref([]);           // chips reales
+    const elementosInput = ref('');           // input visible (reemplaza uso de formData.elementos)
+
+    function agregarElemento() {
+      // acepta varios separados por coma o Enter
+      const partes = String(elementosInput.value || '')
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean);
+
+      for (const p of partes) {
+        const yaExiste = elementosLista.value.some(e => e.toLowerCase() === p.toLowerCase());
+        if (!yaExiste) elementosLista.value.push(p);
+      }
+      elementosInput.value = '';
+    }
+
+    function eliminarElemento(i) {
+      elementosLista.value.splice(i, 1);
+    }
+
 
     // Detectar cambio en el select
     function manejarCambioTema(e) {
@@ -359,9 +368,9 @@ export default {
     // Validación del tema final
     const temaFinalPresente = computed(() => {
       if (temaLibreActivo.value) {
-        return formData.value.tema_libre && formData.value.tema_libre.trim().length > 0
+        return !!formData.value.tema_libre && formData.value.tema_libre.trim().length > 0;
       }
-      return formData.value.tema && formData.value.tema.trim().length > 0
+      return !!formData.value.tema && formData.value.tema.trim().length > 0;
     })
 
     // ===============================
@@ -369,13 +378,6 @@ export default {
     // ===============================
 
     const temaSeleccionadoEsLibre = computed(() => formData.value.tema === 'libre')
-
-    const temaFinalPresent = computed(() => {
-      if (temaSeleccionadoEsLibre.value) {
-        return formData.value.tema_libre && formData.value.tema_libre.trim().length > 0
-      }
-      return formData.value.tema && formData.value.tema.trim().length > 0
-    })
 
 
     // Seleccionar tema (recibe el objeto tema)
@@ -422,29 +424,23 @@ export default {
       });
     }
 
-    // 🔧 Estados de loading IA
-    const loadingSteps = [
-      "Analizando perfil del estudiante",
-      "Escribiendo historia educativa",
-      "Generando ilustración con Freepik",
-      "Guardando historia en la base de datos"
-    ];
-    const loadingPaso = ref(0);
-    const loadingTitulo = ref("🤖 Preparando generación...");
-
-    const actualizarPaso = (titulo, paso) => {
-      loadingTitulo.value = titulo;
-      loadingPaso.value = paso;
-    };
-
     async function crearHistoria() {
       mostrarErrorGenerico.value = false;
       mostrarErrorTemaLibre.value = false;
       error.value = null;
 
+      console.log('🚀 crearHistoria() iniciado');
+      console.log('formData:', formData.value);
+      console.log('elementosLista (antes):', elementosLista.value, 'input:', elementosInput.value);
+
+      // Asegura que el último texto escrito pase a chips
+      agregarElemento();
+      console.log('elementosLista (después de agregarElemento):', elementosLista.value);
+
       // Validaciones
       if (!formData.value.tema) {
         error.value = "Por favor selecciona un tema";
+        console.warn("⚠️ Falta tema");
         mostrarErrorGenerico.value = true;
         return;
       }
@@ -461,13 +457,16 @@ export default {
         error.value = "Por favor selecciona la edad del protagonista";
         return;
       }
-      if (!formData.value.elementos.trim()) {
-        error.value = "Por favor escribe al menos un elemento especial";
+      // ✅ validar chips, no el string viejo
+      if (elementosLista.value.length === 0) {
+        error.value = "Por favor agrega al menos un elemento especial (presiona Enter o coma)";
         return;
       }
 
       const usuarioActual = authStore.user || authStore.profile;
-      if (!usuarioActual?.id) {
+      console.log('👤 user/profile:', usuarioActual);
+
+      if (!usuarioActual?.id && !usuarioActual?.alumno_id) {
         error.value = "No se pudo identificar al usuario. Inicia sesión nuevamente.";
         return;
       }
@@ -480,69 +479,34 @@ export default {
       const payload = {
         user_id: alumnoId,
         topic: temaFinal,
-        elementos: formData.value.elementos,
-        nombre: formData.value.nombre_protagonista,
-        edad: formData.value.edad_protagonista
+        elementos: elementosLista.value.join(', '), // ✅ string para el backend
+        nombre: formData.value.nombre_protagonista.trim(),
+        edad: Number(formData.value.edad_protagonista)
       };
 
-      generando.value = true;
-      loadingPaso.value = 0;
-      loadingTitulo.value = "🤖 Iniciando generación de historia...";
+      console.log("📤 Enviando payload a generarHistoria:", payload);
+
 
       try {
-        // Simulación de fases progresivas
-        actualizarPaso("🧠 Analizando perfil del estudiante...", 0);
-        await new Promise((r) => setTimeout(r, 1500));
-
-        actualizarPaso("✍️ Escribiendo historia educativa...", 1);
-        await new Promise((r) => setTimeout(r, 2500));
-
-        const data = await apiService.generarHistoria(payload);
-        console.log("✅ Historia generada:", data);
-
-        actualizarPaso("🎨 Generando ilustración...", 2);
-        await new Promise((r) => setTimeout(r, 2000));
-
-        // Procesar respuesta IA
-        const normalized = {
+        const data = await apiService.generarHistoria(payload)
+        console.log("✅ Respuesta backend:", data);
+        historiaGenerada.value = {
           titulo: data.title,
           contenido: data.content,
           tema: data.topic,
-          question_answer: data.question_answer || data.questions,
-          story_metadata: data.story_metadata,
           personajes: Array.isArray(data.characters)
               ? data.characters
               : tryParseJSON(data.characters),
-          record_id: data.record_id,
-          created_at: data.created_at,
+          palabras: data.content?.split(/\s+/).length || 0,
           image_b64: data.image_b64
-        };
-
-        const rawQuestions = Array.isArray(normalized.question_answer)
-            ? normalized.question_answer
-            : tryParseJSON(normalized.question_answer);
-
-        normalized.questions = normalizeQuestions(rawQuestions);
-        historiaGenerada.value = {
-          ...normalized,
-          palabras: normalized.contenido
-              ? normalized.contenido.split(/\s+/).length
-              : 0
-        };
-
-        actualizarPaso("💾 Guardando historia completada...", 3);
-        await new Promise((r) => setTimeout(r, 800));
+        }
       } catch (err) {
-        console.error("❌ Error generando historia:", err);
-        error.value =
-            err.response?.data?.detail ||
-            err.response?.data?.message ||
-            "Ocurrió un error al generar la historia.";
-      } finally {
-        generando.value = false;
-        loadingPaso.value = 0;
+        console.error("❌ Error completo:", err);
+        console.log("📦 err.response?.data:", err?.response?.data);
+        error.value = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "Error desconocido";
       }
     }
+
 
     function tryParseJSON(str) {
       try {
@@ -684,56 +648,85 @@ export default {
       error.value = null
     }
 
-    // Si el usuario no está autenticado, redirigir
     onMounted(() => {
       if (!authStore.isAuthenticated || !authStore.isAlumno) {
         router.push('/login')
       }
     })
 
+    watch(historiaGenerada, async (nueva, antigua) => {
+      // destruir tilt previo
+      if (antigua?.image_b64 && tiltImg.value?.vanillaTilt) {
+        tiltImg.value.vanillaTilt.destroy()
+      }
+
+      if (!nueva?.image_b64) return
+      await nextTick()
+
+      // inicializar Tilt sobre el <img ref="tiltImg">
+      if (tiltImg.value) {
+        VanillaTilt.init(tiltImg.value, {
+          max: 15,
+          speed: 300,
+          scale: 1.05,
+          glare: true,
+          "max-glare": 0.4,
+          gyroscope: true,
+          reset: true,
+        })
+        console.log("✨ VanillaTilt inicializado")
+      }
+    })
+
+
+
     // ============================================================================
     // 🔧 MÉTODOS AUXILIARES
     // ============================================================================
-    
+
     function getTemaLabel(temaId) {
       const tema = temas.value.find(t => t.id === temaId)
       return tema ? tema.nombre : temaId
     }
 
+    const imagenRef = ref(null);
+
 
 
     return {
+      elementosLista,
+      elementosInput,
+      agregarElemento,
+      eliminarElemento,
       // Estados - Formulario
       formData,
-      generando,
       error,
-
       // Estados - Preguntas
       mostrarPreguntas,
       preguntaActual,
       respuestasUsuario,
       puntosTotales,
       juegoCompletado,
-      
+
       // Computed - Formulario
       profile,
       temas,
       historiaGenerada,
       edadesDisponibles,
-      
+
       // Computed - Preguntas
       preguntas,
       preguntaEnCurso,
       totalPreguntas,
       progresoPorcentaje,
-      
+
       // Métodos - Formulario
       seleccionarTema,
       crearHistoria,
       clearError,
       getTemaLabel,
       getParrafos,
-      
+
       // Métodos - Preguntas
       irAPreguntas,
       responderPregunta,
@@ -745,18 +738,15 @@ export default {
       verMisHistorias,
 
       mostrarErrorGenerico,
-      temaFinalPresent,
       mostrarErrorTemaLibre,
       temaSeleccionadoEsLibre,
       temaFinalPresente,
       manejarCambioTema,
       temaLibreActivo,
       formularioCompleto,
-      loadingSteps,
-      actualizarPaso,
-      loadingPaso,
-      loadingTitulo
-
+      imagenRef,
+      tiltWrap,
+      tiltImg
     }
   }
 }
@@ -764,67 +754,76 @@ export default {
 
 <style scoped>
 
-.loading-historia {
-  text-align: center;
-  padding: 3rem 1rem;
-}
-
-.loading-animation {
+.historia-imagen-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 2rem auto;
   display: flex;
   justify-content: center;
-  margin-bottom: 1rem;
+  align-items: center;
 }
 
-.loading-circle {
-  width: 1rem;
-  height: 1rem;
-  margin: 0 0.4rem;
-  border-radius: 50%;
-  background-color: #6b73ff;
-  animation: pulse 1.2s infinite ease-in-out;
+.imagen-tilt {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+.chips-input {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s;
 }
 
-.loading-circle:nth-child(2) { animation-delay: 0.2s; }
-.loading-circle:nth-child(3) { animation-delay: 0.4s; }
+.chips-input:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chip {
+  background-color: #e0e7ff;
+  color: #1e3a8a;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-remove {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: #1e3a8a;
+}
+
+.hint-message {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
 
 @keyframes pulse {
   0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
   40% { transform: scale(1); opacity: 1; }
 }
 
-.loading-steps {
-  list-style: none;
-  padding: 0;
-  margin-top: 1.5rem;
-  text-align: left;
-  max-width: 400px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.loading-steps li {
-  margin-bottom: 0.4rem;
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-}
-
-.loading-steps li span.icono-step {
-  margin-right: 0.6rem;
-}
-
-.loading-steps li.activo {
-  font-weight: bold;
-  color: #4f46e5;
-}
-
-.loading-steps li.completado {
-  color: #22c55e;
-}
-
-.loading-steps li.pendiente {
-  color: #999;
-}
 
 
 .error-message {
@@ -1075,52 +1074,10 @@ export default {
   background: #e0e0e0;
 }
 
-.loading-historia {
-  text-align: center;
-  padding: 60px 20px;
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-}
-
-.loading-animation {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.loading-circle {
-  width: 15px;
-  height: 15px;
-  background: #667eea;
-  border-radius: 50%;
-  margin: 0 5px;
-  animation: bounce 0.6s infinite alternate;
-}
-
-.loading-circle:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.loading-circle:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
 @keyframes bounce {
   to {
     transform: translateY(-20px);
   }
-}
-
-.loading-historia h3 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.loading-historia p {
-  color: #666;
-  font-size: 1rem;
 }
 
 .historia-resultado {
@@ -1486,24 +1443,26 @@ export default {
   .temas-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .historia-info {
     flex-direction: column;
     align-items: center;
   }
-  
+
   .historia-actions {
     display: flex;
     flex-direction: column;
     gap: 15px;
   }
-  
+
   .estadisticas {
     gap: 20px;
   }
-  
+
   .acciones-finales {
     flex-direction: column;
   }
 }
+
+
 </style>

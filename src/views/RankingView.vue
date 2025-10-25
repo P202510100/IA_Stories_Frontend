@@ -7,7 +7,7 @@
         <button @click="volverAtras" class="btn-back">
           ← Volver
         </button>
-        <h1>🏆 Ranking de la Clase</h1>
+        <h1>🏆 Ranking del Salón</h1>
         <p>Ve cómo te comparas con tus compañeros</p>
       </div>
       
@@ -180,7 +180,7 @@
           <div class="stat-card">
             <div class="stat-icon">🎯</div>
             <h3>{{ estadisticas.promedioClase || 0 }}%</h3>
-            <p>Precisión promedio de la clase</p>
+            <p>Precisión promedio del salón</p>
           </div>
           
           <div class="stat-card">
@@ -221,72 +221,52 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import apiService from "../services/api.js";
+import { useLoaderStore } from '../stores/loaderStore'
+import apiService from '../services/api.js'
 
-export default {
-  name: 'RankingView',
-  setup() {
-    const router = useRouter()
-    const authStore = useAuthStore()
-    
-    const cargando = ref(true)
-    const error = ref('')
-    const criterioSeleccionado = ref('puntos')
-    const rankingCompleto = ref([])
-    const estadisticas = ref({})
-    
-    const user = computed(() => authStore.user)
-    
-    const top3 = computed(() => {
-      return rankingCompleto.value.slice(0, 3)
-    })
-    
-    const miPosicion = computed(() => {
-      const miUsuario = rankingCompleto.value.find(estudiante => 
-        estudiante.id === user.value?.id
-      )
-      
-      if (miUsuario) {
-        const posicion = rankingCompleto.value.indexOf(miUsuario) + 1
-        return {
-          ...miUsuario,
-          posicion
-        }
-      }
-      
-      return null
-    })
-    
-    const cargarRanking = async () => {
-      cargando.value = true
-      error.value = ''
-      
-      try {
-        // TODO: Llamar API 
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        
-        // Datos de ejemplo
-        const datos = generarDatosRanking()
-        rankingCompleto.value = datos.ranking
-        estadisticas.value = datos.estadisticas
-        
-      } catch (err) {
-        console.error('Error cargando ranking:', err)
-        error.value = 'Error al cargar el ranking'
-      } finally {
-        cargando.value = false
-      }
-    }
-    
-const generarDatosRanking = async () => {
+const router = useRouter()
+const authStore = useAuthStore()
+const loader = useLoaderStore()
+
+// Estado
+const error = ref('')
+const criterioSeleccionado = ref('puntos')
+const rankingCompleto = ref([])
+const estadisticas = ref({})
+
+const user = computed(() => authStore.user)
+
+// Computed derivados
+const top3 = computed(() => rankingCompleto.value.slice(0, 3))
+
+const miPosicion = computed(() => {
+  const miUsuario = rankingCompleto.value.find(e => e.id === user.value?.id)
+  if (miUsuario) {
+    const posicion = rankingCompleto.value.indexOf(miUsuario) + 1
+    return { ...miUsuario, posicion }
+  }
+  return null
+})
+
+// =======================================================
+// 🚀 Cargar Ranking
+// =======================================================
+async function cargarRanking() {
+  error.value = ''
+
   try {
-    const response = await apiService.obtenerRanking();
-    console.log('response from ranking', response)
-    const estudiantesReales = (response.ranking || []).map((estudiante, index) => ({
+    loader.show({
+      message: 'Cargando ranking...',
+      submessage: 'Obteniendo datos de todos los estudiantes',
+      type: 'book'
+    })
+
+    const response = await apiService.obtenerRanking()
+    const estudiantesReales = (response?.ranking || []).map((estudiante, index) => ({
       id: estudiante.id,
       nombre: estudiante.nombre,
       puntos: estudiante.puntos || 0,
@@ -296,140 +276,99 @@ const generarDatosRanking = async () => {
       total_respuestas: estudiante.total_respuestas || 0,
       tendencia: determinarTendencia(index),
       cambio: Math.floor(Math.random() * 5) - 2
-    }));
+    }))
 
-    rankingCompleto.value = estudiantesReales;
-    estadisticas.value = response.estadisticas;
+    rankingCompleto.value = estudiantesReales
+    estadisticas.value = response?.estadisticas || {}
 
-    console.log("✅ Ranking cargado:", estudiantesReales);
+    console.log('✅ Ranking cargado:', estudiantesReales)
   } catch (err) {
-    console.error("❌ Error cargando ranking:", err);
-    error.value = "Error al cargar el ranking";
+    console.error('❌ Error cargando ranking:', err)
+    error.value = 'Error al cargar el ranking'
   } finally {
-    cargando.value = false;
+    loader.hide()
   }
 }
 
-//  AGREGAR funciones auxiliares
-const calcularPrecisionRanking = (estudiante) => {
-  if (estudiante.respuestas_correctas && estudiante.total_respuestas) {
-    return Math.round((estudiante.respuestas_correctas / estudiante.total_respuestas) * 100)
-  }
-  
-  // Estimación temporal
-  const puntos = estudiante.puntos_totales || 0
-  const historias = estudiante.total_historias || 1
-  
-  return Math.min(100, Math.max(50, Math.round((puntos / (historias * 100)) * 100)))
-}
-
-const determinarTendencia = (index) => {
-  // Temporal hasta tener datos reales de tendencia
+// =======================================================
+// 🔧 Funciones auxiliares
+// =======================================================
+function determinarTendencia(index) {
   const tendencias = ['up', 'down', 'stable']
   return tendencias[index % 3]
 }
 
-    
-    const getInitials = (nombre) => {
-      return nombre.split(' ').map(n => n[0]).join('').toUpperCase()
-    }
-    
-    const getCrown = (posicion) => {
-      const crowns = ['👑', '🥈', '🥉']
-      return crowns[posicion - 1] || ''
-    }
-    
-    const getMedal = (posicion) => {
-      const medals = ['🥇', '🥈', '🥉']
-      return medals[posicion - 1] || ''
-    }
-    
-    const getValorFormateado = (estudiante) => {
-      switch (criterioSeleccionado.value) {
-        case 'puntos':
-          return `${estudiante.puntos} puntos`
-        case 'historias':
-          return `${estudiante.historias} historias`
-        case 'precision':
-          return `${estudiante.precision}% precisión`
-        default:
-          return `${estudiante.puntos} puntos`
-      }
-    }
-    
-    const getTrendClass = (tendencia) => {
-      switch (tendencia) {
-        case 'up':
-          return 'trend-up'
-        case 'down':
-          return 'trend-down'
-        case 'stable':
-          return 'trend-stable'
-        default:
-          return 'trend-stable'
-      }
-    }
-    
-    const getTrendIcon = (tendencia) => {
-      switch (tendencia) {
-        case 'up':
-          return '↗️'
-        case 'down':
-          return '↘️'
-        case 'stable':
-          return '→'
-        default:
-          return '→'
-      }
-    }
-    
-    const formatearCambio = (cambio) => {
-      if (!cambio || cambio === 0) return '='
-      if (cambio > 0) return `+${cambio}`
-      return `${cambio}`
-    }
-    
-    const calcularProgreso = (estudiante, index) => {
-      if (index === 0) return 100
-      const mejorValor = rankingCompleto.value[0]?.[criterioSeleccionado.value] || 1
-      const valorEstudiante = estudiante[criterioSeleccionado.value] || 0
-      return Math.max(10, (valorEstudiante / mejorValor) * 100)
-    }
-    
-    const esMiPosicion = (estudiante) => {
-      return estudiante.id === user.value?.id
-    }
-    
-    const volverAtras = () => {
-      router.push('/dashboard-alumno')
-    }
-    
-    onMounted(() => {
-      cargarRanking()
-    })
-    
-    return {
-      cargando,
-      error,
-      criterioSeleccionado,
-      rankingCompleto,
-      estadisticas,
-      top3,
-      miPosicion,
-      cargarRanking,
-      getInitials,
-      getCrown,
-      getMedal,
-      getValorFormateado,
-      getTrendClass,
-      getTrendIcon,
-      formatearCambio,
-      calcularProgreso,
-      esMiPosicion,
-      volverAtras
-    }
+function getInitials(nombre) {
+  return nombre?.split(' ').map(n => n[0]).join('').toUpperCase() || '?'
+}
+
+function getCrown(posicion) {
+  return ['👑', '🥈', '🥉'][posicion - 1] || ''
+}
+
+function getMedal(posicion) {
+  return ['🥇', '🥈', '🥉'][posicion - 1] || ''
+}
+
+function getValorFormateado(estudiante) {
+  switch (criterioSeleccionado.value) {
+    case 'puntos':
+      return `${estudiante.puntos} puntos`
+    case 'historias':
+      return `${estudiante.historias} historias`
+    case 'precision':
+      return `${estudiante.precision}% precisión`
+    default:
+      return `${estudiante.puntos} puntos`
   }
 }
+
+function getTrendClass(tendencia) {
+  return {
+    up: 'trend-up',
+    down: 'trend-down',
+    stable: 'trend-stable'
+  }[tendencia] || 'trend-stable'
+}
+
+function getTrendIcon(tendencia) {
+  return {
+    up: '↗️',
+    down: '↘️',
+    stable: '→'
+  }[tendencia] || '→'
+}
+
+function formatearCambio(cambio) {
+  if (!cambio || cambio === 0) return '='
+  return cambio > 0 ? `+${cambio}` : `${cambio}`
+}
+
+function calcularProgreso(estudiante, index) {
+  if (index === 0) return 100
+  const mejorValor = rankingCompleto.value[0]?.[criterioSeleccionado.value] || 1
+  const valorEstudiante = estudiante[criterioSeleccionado.value] || 0
+  return Math.max(10, (valorEstudiante / mejorValor) * 100)
+}
+
+function esMiPosicion(estudiante) {
+  return estudiante.id === user.value?.id
+}
+
+function volverAtras() {
+  router.push('/dashboard-alumno')
+}
+
+// =======================================================
+// 🪄 Lifecycle
+// =======================================================
+onMounted(async () => {
+  if (!authStore.isAuthenticated || !authStore.isAlumno) {
+    router.push('/login')
+    return
+  }
+  await cargarRanking()
+})
 </script>
 
 <style scoped>
