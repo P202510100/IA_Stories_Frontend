@@ -178,7 +178,6 @@
               }"
               :disabled="respuestasUsuario[preguntaActual]"
             >
-              <span class="opcion-letra">{{ String.fromCharCode(65 + index) }})</span>
               <span class="opcion-texto">{{ opcion }}</span>
             </button>
           </div>
@@ -190,20 +189,37 @@
           </div>
 
           <!-- Resultado de la respuesta -->
-          <div v-if="respuestasUsuario[preguntaActual]" class="resultado-respuesta">
-            <div class="resultado-icon">
-              {{ respuestasUsuario[preguntaActual].es_correcta ? '✅' : '❌' }}
-            </div>
-            <div class="resultado-texto">
-              <h4>{{ respuestasUsuario[preguntaActual].es_correcta ? '¡Correcto!' : '¡Inténtalo de nuevo!' }}</h4>
-              <p v-if="preguntaEnCurso.explicacion" class="explicacion">
-                {{ preguntaEnCurso.explicacion }}
-              </p>
-              <div class="puntos-ganados">
-                +{{ respuestasUsuario[preguntaActual].puntos_ganados || 0 }} puntos
+          <div
+              v-if="respuestasUsuario[preguntaActual]"
+                             class="resultado-respuesta"
+                             :class="{
+                   'correcto': respuestasUsuario[preguntaActual].es_correcta,
+                   'incorrecto': !respuestasUsuario[preguntaActual].es_correcta
+                 }"
+          >
+            <transition name="fade-bounce">
+              <div key="resultado" class="resultado-contenido">
+                <div class="resultado-icon">
+                  {{ respuestasUsuario[preguntaActual].es_correcta ? '🎉' : '❌' }}
+                </div>
+                <div class="resultado-texto">
+                  <h4 class="resultado-titulo">
+                    {{ respuestasUsuario[preguntaActual].es_correcta ? '¡Excelente!' : '¡Ups, inténtalo otra vez!' }}
+                  </h4>
+                  <p v-if="preguntaEnCurso.explicacion" class="explicacion">
+                    💡 {{ preguntaEnCurso.explicacion }}
+                  </p>
+                  <div
+                      v-if="respuestasUsuario[preguntaActual].es_correcta"
+                      class="puntos-ganados"
+                  >
+                    ⭐ +{{ respuestasUsuario[preguntaActual].puntos_ganados || 0 }} puntos
+                  </div>
+                </div>
               </div>
-            </div>
+            </transition>
           </div>
+
         </div>
       </div>
 
@@ -264,6 +280,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import apiService from "../services/api.js";
 import VanillaTilt from "vanilla-tilt";
+import confetti from 'canvas-confetti';
 
 export default {
   name: 'CrearHistoria',
@@ -490,16 +507,33 @@ export default {
       try {
         const data = await apiService.generarHistoria(payload)
         console.log("✅ Respuesta backend:", data);
-        historiaGenerada.value = {
+
+        const normalized = {
           titulo: data.title,
           contenido: data.content,
           tema: data.topic,
+          question_answer: data.question_answer || data.questions,
+          story_metadata: data.story_metadata,
           personajes: Array.isArray(data.characters)
               ? data.characters
               : tryParseJSON(data.characters),
-          palabras: data.content?.split(/\s+/).length || 0,
+          record_id: data.record_id,
+          created_at: data.created_at,
           image_b64: data.image_b64
         }
+
+        const rawQuestions = Array.isArray(normalized.question_answer)
+            ? normalized.question_answer
+            : tryParseJSON(normalized.question_answer);
+
+        normalized.questions = normalizeQuestions(rawQuestions);
+        historiaGenerada.value = {
+          ...normalized,
+          palabras: normalized.contenido
+              ? normalized.contenido.split(/\s+/).length
+              : 0
+        };
+
       } catch (err) {
         console.error("❌ Error completo:", err);
         console.log("📦 err.response?.data:", err?.response?.data);
@@ -540,24 +574,56 @@ export default {
     }
 
     function responderPregunta(opcionSeleccionada) {
-      if (!preguntaEnCurso.value) return
-      if (!preguntaEnCurso.value) return
-      const esCorrecta = opcionSeleccionada === preguntaEnCurso.value.respuesta_correcta
+      if (!preguntaEnCurso.value) return;
 
-      respuestasUsuario.value.push({
+      const esCorrecta = opcionSeleccionada === preguntaEnCurso.value.respuesta_correcta;
+
+      // Registrar respuesta (usando el índice actual)
+      respuestasUsuario.value[preguntaActual.value] = {
         pregunta_id: preguntaEnCurso.value.id,
         opcion_elegida: opcionSeleccionada,
         es_correcta: esCorrecta,
-        puntos_ganados: esCorrecta ? 1 : 0 // sumamos cantidad de correctas
-      })
+        puntos_ganados: esCorrecta ? 1 : 0
+      };
 
+      // 🎊 CONFETTI animado al acertar
+      if (esCorrecta) {
+        import('canvas-confetti').then((module) => {
+          const confetti = module.default;
+          const duration = 1.8 * 1000;
+          const end = Date.now() + duration;
+
+          (function frame() {
+            confetti({
+              particleCount: 6,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0 },
+              colors: ['#00ff99', '#66ffcc', '#ffffff']
+            });
+            confetti({
+              particleCount: 6,
+              angle: 120,
+              spread: 55,
+              origin: { x: 1 },
+              colors: ['#00ff99', '#66ffcc', '#ffffff']
+            });
+            if (Date.now() < end) {
+              requestAnimationFrame(frame);
+            }
+          })();
+        });
+      }
+
+      // 🎨 Animación visual (resalta opción y muestra feedback)
+      const duracionFeedback = 3000; // 2.5 segundos antes de avanzar
       setTimeout(() => {
         if (preguntaActual.value < totalPreguntas.value - 1) {
-          preguntaActual.value++
+          preguntaActual.value++;
         } else {
-          completarJuego()
+          completarJuego();
         }
-      }, 1200)
+      }, duracionFeedback);
     }
 
     async function completarJuego() {
@@ -753,6 +819,169 @@ export default {
 </script>
 
 <style scoped>
+/* === OPCIONES === */
+.opciones-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.opcion-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 0.9rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+}
+
+.opcion-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  transform: scale(1.01);
+}
+
+/* Correcta / Incorrecta */
+.opcion-btn.correcta {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  border: none;
+  box-shadow: 0 0 14px rgba(34,197,94,0.4);
+}
+
+.opcion-btn.incorrecta {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  color: #fff;
+  border: none;
+  box-shadow: 0 0 14px rgba(239,68,68,0.4);
+}
+
+/* Botón deshabilitado */
+.opcion-btn:disabled {
+  opacity: 0.85;
+  cursor: not-allowed;
+}
+
+/* === FEEDBACK === */
+.resultado-respuesta {
+  margin-top: 1.5rem;
+  border-radius: 16px;
+  padding: 1.2rem;
+  text-align: center;
+  color: #fff;
+  font-weight: 500;
+  animation: fadeIn 0.6s ease;
+}
+
+.resultado-respuesta.correcto {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow: 0 0 25px rgba(34,197,94,0.4);
+}
+
+.resultado-respuesta.incorrecto {
+  background: linear-gradient(135deg, #ef4444, #f87171);
+  box-shadow: 0 0 25px rgba(239,68,68,0.4);
+}
+
+.resultado-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+
+.resultado-titulo {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.explicacion {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.puntos-ganados {
+  margin-top: 0.7rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+
+@keyframes pop {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Resultado general */
+.resultado-respuesta {
+  margin-top: 1.5rem;
+  padding: 1.2rem;
+  border-radius: 16px;
+  text-align: center;
+  color: #fff;
+  transition: all 0.4s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+
+.resultado-contenido {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+
+.explicacion {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+
+
+/* Animaciones */
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
 
 .historia-imagen-wrapper {
   position: relative;
@@ -837,10 +1066,7 @@ export default {
   animation: fadeIn 0.3s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+
 
 .select-tema {
   width: 100%;
@@ -1239,43 +1465,6 @@ export default {
   line-height: 1.4;
 }
 
-.opciones-grid {
-  display: grid;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.opcion-btn {
-  display: flex;
-  align-items: center;
-  padding: 15px 20px;
-  border: 2px solid #e0e0e0;
-  border-radius: 15px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: left;
-}
-
-.opcion-btn:hover:not(:disabled) {
-  border-color: #667eea;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
-}
-
-.opcion-btn.correcta {
-  border-color: #4caf50;
-  background: #e8f5e8;
-}
-
-.opcion-btn.incorrecta {
-  border-color: #f44336;
-  background: #ffebee;
-}
-
-.opcion-btn:disabled {
-  cursor: not-allowed;
-}
 
 .opcion-letra {
   background: #667eea;
@@ -1296,15 +1485,6 @@ export default {
   font-size: 1rem;
 }
 
-.resultado-respuesta {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 15px;
-  margin-top: 20px;
-}
 
 .resultado-icon {
   font-size: 2rem;

@@ -83,8 +83,35 @@
             </div>
           </div>
         </div>
-      </div>
+        <div class="precision-tipos">
+          <h3>📊 Precisión por tipo de pregunta</h3>
+          <div class="tipos-grid">
+            <div class="tipo-card inferencial">
+              <span class="tipo-icon">🤔</span>
+              <div>
+                <strong>Inferencial:</strong>
+                <span>{{ estadisticas.detalle_por_tipo.inferencial?.precision || 0 }}%</span>
+              </div>
+            </div>
 
+            <div class="tipo-card juicio">
+              <span class="tipo-icon">⚖️</span>
+              <div>
+                <strong>Juicio Crítico:</strong>
+                <span>{{ estadisticas.detalle_por_tipo.juicio_critico?.precision || 0 }}%</span>
+              </div>
+            </div>
+
+            <div class="tipo-card creativa">
+              <span class="tipo-icon">💡</span>
+              <div>
+                <strong>Creativa:</strong>
+                <span>{{ estadisticas.detalle_por_tipo.creativa?.precision || 0 }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Loading state -->
       <div v-if="loading" class="loading-container">
         <div class="loading-spinner"></div>
@@ -161,24 +188,30 @@
           </div>
         </div>
 
-        <!-- Paginación si hay muchas historias -->
         <div v-if="totalPaginas > 1" class="paginacion">
           <button
-            @click="cambiarPagina(paginaActual - 1)"
-            :disabled="paginaActual === 1"
-            class="btn-pagina"
+              @click="cambiarPagina(paginaActual - 1)"
+              :disabled="paginaActual === 1"
+              class="btn-pagina"
           >
             ← Anterior
           </button>
 
-          <span class="pagina-info">
-            Página {{ paginaActual }} de {{ totalPaginas }}
-          </span>
+          <div class="pagina-numeros">
+            <button
+                v-for="num in totalPaginas"
+                :key="num"
+                @click="cambiarPagina(num)"
+                :class="['btn-numero', { activo: num === paginaActual }]"
+            >
+              {{ num }}
+            </button>
+          </div>
 
           <button
-            @click="cambiarPagina(paginaActual + 1)"
-            :disabled="paginaActual === totalPaginas"
-            class="btn-pagina"
+              @click="cambiarPagina(paginaActual + 1)"
+              :disabled="paginaActual === totalPaginas"
+              class="btn-pagina"
           >
             Siguiente →
           </button>
@@ -224,6 +257,7 @@ import api from '../services/api.js'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import OverlayLoader from "../components/OverlayLoader.vue";
+import {calcularNivel} from "@/utils/levels.js";
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -310,21 +344,83 @@ async function cargarDatos() {
 
 async function cargarEstadisticas() {
   try {
-    const totalHistorias = historias.value.length
-    const puntosTotales = historias.value.reduce((sum, h) => sum + (h.puntos_obtenidos || 0), 0)
-    const totalPreguntas = historias.value.reduce((sum, h) => sum + (h.correctas || 0), 0)
-    const totalCorrectas = historias.value.reduce((sum, h) => sum + (h.total_preguntas || 0), 0)
+    const totalHistorias = historias.value.length;
+    if (totalHistorias === 0) {
+      estadisticas.value = {
+        total_historias: 0,
+        puntos_totales: 0,
+        promedio_respuestas: 0,
+        detalle_por_tipo: {},
+        nivel_actual: { nombre: 'Principiante' }
+      };
+      return;
+    }
+
+    let puntosTotales = 0;
+    let correctasGlobal = 0;
+    let totalGlobal = 0;
+
+    // Mapa de tipos de pregunta
+    const tipos = {
+      inferencial: { correctas: 0, total: 0 },
+      juicio_critico: { correctas: 0, total: 0 },
+      creativa: { correctas: 0, total: 0 }
+    };
+
+    // 🔍 Recorremos historias y buscamos detalles desde el backend
+    for (const h of historias.value) {
+      try {
+        const det = await api.cargarHistoriaPorId(h.recorId);
+        const preguntas = det?.story?.question_answer ?? [];
+        const respuestas = det?.answers ?? [];
+
+        puntosTotales += h.puntos_obtenidos || 0;
+
+        preguntas.forEach((q, i) => {
+          const tipo = (q.tipo || q.type || "inferencial").toLowerCase();
+          const respuesta = respuestas.find(r => r.question_index === i);
+          const esCorrecta = respuesta?.is_correct === true;
+
+          if (!tipos[tipo]) tipos[tipo] = { correctas: 0, total: 0 };
+          tipos[tipo].total += 1;
+          if (esCorrecta) tipos[tipo].correctas += 1;
+
+          totalGlobal += 1;
+          if (esCorrecta) correctasGlobal += 1;
+        });
+      } catch (err) {
+        console.warn(`⚠️ No se pudieron obtener preguntas de la historia ${h.id}`, err);
+      }
+    }
+
+    const calcPrec = (c, t) => (t > 0 ? ((c / t) * 100).toFixed(1) : 0);
 
     estadisticas.value = {
       total_historias: totalHistorias,
       puntos_totales: puntosTotales,
-      promedio_respuestas:
-          totalPreguntas > 0 ? ((totalCorrectas / totalPreguntas) * 100).toFixed(1) : 0,
-      nivel_actual: { nombre: 'Principiante' }
-    }
+      promedio_respuestas: calcPrec(correctasGlobal, totalGlobal),
+      detalle_por_tipo: {
+        inferencial: { ...tipos.inferencial, precision: calcPrec(tipos.inferencial.correctas, tipos.inferencial.total) },
+        juicio_critico: { ...tipos.juicio_critico, precision: calcPrec(tipos.juicio_critico.correctas, tipos.juicio_critico.total) },
+        creativa: { ...tipos.creativa, precision: calcPrec(tipos.creativa.correctas, tipos.creativa.total) }
+      },
+      nivel_actual: calcularNivel(correctasGlobal, totalGlobal)
+    };
   } catch (err) {
-    console.error('❌ Error cargando estadísticas:', err)
+    console.error("❌ Error cargando estadísticas:", err);
   }
+}
+
+function cambiarPagina(nuevaPagina) {
+  // Evitar salir de rango
+  if (nuevaPagina < 1 || nuevaPagina > totalPaginas.value) return;
+  paginaActual.value = nuevaPagina;
+
+  // Scroll hacia arriba para mejorar UX
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
 }
 
 async function recargarHistorias() {
@@ -562,6 +658,76 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.pagina-numeros {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-numero {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-numero:hover {
+  background: #f3f4f6;
+}
+
+.btn-numero.activo {
+  background: #4f46e5;
+  color: white;
+  border-color: #4f46e5;
+}
+
+.precision-tipos {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.tipos-grid {
+  display: flex;
+  justify-content: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+}
+
+.tipo-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.tipo-card:hover {
+  transform: scale(1.03);
+}
+
+.tipo-icon {
+  font-size: 1.2rem;
+}
+
+.tipo-card.inferencial {
+  border-color: #3b82f6;
+}
+
+.tipo-card.juicio {
+  border-color: #f59e0b;
+}
+
+.tipo-card.creativa {
+  border-color: #10b981;
+}
+
 .loading-overlay {
   position: fixed;
   top: 0;
