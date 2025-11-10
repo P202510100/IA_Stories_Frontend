@@ -401,7 +401,7 @@ export default {
 
         studentProfile.value = res
         estudiante.value = res.user ? { ...res.user, edad: res.edad, current_level: res.current_level, last_updated_date: res.last_updated_date} : res
-        console.log('Fecha recibida:', estudiante.last_updated_date);
+        console.log('Fecha recibida:', estudiante.value.fullname);
 
         // Cargar información detallada del estudiante desde el backend
         const response = await apiService.cargarHistoriasPorAlumno(estudianteId.value)
@@ -511,7 +511,7 @@ export default {
       try {
         generandoReporte.value = true
         console.log("📄 Generando reporte PDF...")
-        console.log("this is response", estudiante.value.user.fullname)
+        console.log("this is response", estudiante.value.fullname)
 
         const doc = new jsPDF()
 
@@ -525,8 +525,8 @@ export default {
         doc.text("Reporte de Rendimiento", 105, 20, { align: "center" })
 
         doc.setFontSize(12)
-        doc.text(`Estudiante: ${estudiante.value?.user.fullname}`, 14, 50)
-        doc.text(`Email: ${estudiante.value?.user.email}`, 14, 58)
+        doc.text(`Estudiante: ${estudiante.value?.fullname}`, 14, 50)
+        doc.text(`Email: ${estudiante.value?.email}`, 14, 58)
         doc.text(`Edad: ${estudiante.value?.edad || "No especificada"}`, 14, 66)
         doc.text(`Nivel Actual: ${estudiante.value.current_level}`, 14, 74)
         doc.text(`Fecha: ${new Date().toLocaleDateString("es-ES")}`, 14, 82)
@@ -570,7 +570,7 @@ export default {
         })
 
         // Guardar
-        doc.save(`reporte_${estudiante.value.user.fullname}_${new Date().toISOString().split("T")[0]}.pdf`)
+        doc.save(`reporte_${estudiante.value.fullname}_${new Date().toISOString().split("T")[0]}.pdf`)
 
         toastStore.success("Reporte PDF generado exitosamente")
       } catch (error) {

@@ -7,7 +7,7 @@
         <button @click="volverAtras" class="btn-back">
           ← Volver
         </button>
-        <h1>🏆 Ranking del Salón</h1>
+        <h1>🏆 Ranking</h1>
         <p>Ve cómo te comparas con tus compañeros</p>
       </div>
       
